@@ -1,0 +1,35 @@
+# CI workflow for ppds-alm repository
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate YAML
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate GitHub workflow files
+        run: |
+          echo "Validating GitHub workflow files..."
+          for file in github/workflows/*.yml; do
+            echo "Checking $file"
+            # Basic YAML validation using python
+            python3 -c "import yaml; yaml.safe_load(open('$file'))" || exit 1
+          done
+          echo "All GitHub workflow files are valid YAML"
+
+      - name: Validate Azure DevOps template files
+        run: |
+          echo "Validating Azure DevOps template files..."
+          for file in azure-devops/templates/*.yml; do
+            echo "Checking $file"
+            python3 -c "import yaml; yaml.safe_load(open('$file'))" || exit 1
+          done
+          echo "All Azure DevOps template files are valid YAML"

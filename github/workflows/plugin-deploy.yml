@@ -1,0 +1,96 @@
+# github/workflows/plugin-deploy.yml
+# Reusable workflow: Deploy plugins to Dataverse
+name: Deploy Plugins
+
+on:
+  workflow_call:
+    inputs:
+      environment-url:
+        description: 'Dataverse environment URL (e.g., https://org.crm.dynamics.com)'
+        required: true
+        type: string
+      registration-file:
+        description: 'Path to plugin registrations JSON file'
+        required: false
+        type: string
+        default: './registrations.json'
+      detect-drift:
+        description: 'Run drift detection before deployment'
+        required: false
+        type: boolean
+        default: true
+      working-directory:
+        description: 'Working directory for the workflow'
+        required: false
+        type: string
+        default: '.'
+    secrets:
+      client-id:
+        description: 'Azure AD application client ID'
+        required: true
+      client-secret:
+        description: 'Azure AD application client secret'
+        required: true
+      tenant-id:
+        description: 'Azure AD tenant ID'
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy Plugins
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PPDS.Tools
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PPDS.Tools -Force -Scope CurrentUser
+          Import-Module PPDS.Tools
+          Get-Command -Module PPDS.Tools
+
+      - name: Connect to Dataverse
+        shell: pwsh
+        env:
+          DATAVERSE_URL: ${{ inputs.environment-url }}
+          CLIENT_ID: ${{ secrets.client-id }}
+          CLIENT_SECRET: ${{ secrets.client-secret }}
+          TENANT_ID: ${{ secrets.tenant-id }}
+        run: |
+          $secureSecret = ConvertTo-SecureString $env:CLIENT_SECRET -AsPlainText -Force
+          Connect-DataverseEnvironment `
+            -EnvironmentUrl $env:DATAVERSE_URL `
+            -ClientId $env:CLIENT_ID `
+            -ClientSecret $secureSecret `
+            -TenantId $env:TENANT_ID
+
+      - name: Detect Drift
+        if: ${{ inputs.detect-drift }}
+        shell: pwsh
+        run: |
+          Write-Host "Detecting plugin drift..."
+          $drift = Get-DataversePluginDrift -RegistrationFile "${{ inputs.registration-file }}"
+          if ($drift) {
+            Write-Host "::warning::Plugin drift detected. Review changes below:"
+            $drift | ConvertTo-Json -Depth 10
+          } else {
+            Write-Host "No drift detected."
+          }
+
+      - name: Deploy Plugins
+        shell: pwsh
+        run: |
+          Write-Host "Deploying plugins from ${{ inputs.registration-file }}..."
+          $params = @{
+            RegistrationFile = "${{ inputs.registration-file }}"
+          }
+          if ('${{ inputs.detect-drift }}' -eq 'true') {
+            $params.DetectDrift = $true
+          }
+          Deploy-DataversePlugins @params
+          Write-Host "Plugin deployment complete."

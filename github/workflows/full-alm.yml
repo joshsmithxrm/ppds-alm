@@ -1,0 +1,211 @@
+# github/workflows/full-alm.yml
+# Reusable workflow: Complete ALM pipeline (build, export, deploy)
+name: Full ALM Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      source-environment-url:
+        description: 'Source Dataverse environment URL for export'
+        required: true
+        type: string
+      target-environment-url:
+        description: 'Target Dataverse environment URL for import'
+        required: true
+        type: string
+      solution-name:
+        description: 'Unique name of the solution'
+        required: true
+        type: string
+      deploy-managed:
+        description: 'Deploy as managed solution'
+        required: false
+        type: boolean
+        default: true
+      deploy-plugins:
+        description: 'Deploy plugins after solution import'
+        required: false
+        type: boolean
+        default: true
+      plugin-registration-file:
+        description: 'Path to plugin registrations JSON file'
+        required: false
+        type: string
+        default: './registrations.json'
+      working-directory:
+        description: 'Working directory for the workflow'
+        required: false
+        type: string
+        default: '.'
+    secrets:
+      source-client-id:
+        description: 'Azure AD client ID for source environment'
+        required: true
+      source-client-secret:
+        description: 'Azure AD client secret for source environment'
+        required: true
+      source-tenant-id:
+        description: 'Azure AD tenant ID for source environment'
+        required: true
+      target-client-id:
+        description: 'Azure AD client ID for target environment'
+        required: true
+      target-client-secret:
+        description: 'Azure AD client secret for target environment'
+        required: true
+      target-tenant-id:
+        description: 'Azure AD tenant ID for target environment'
+        required: true
+
+jobs:
+  export:
+    name: Export from Source
+    runs-on: ubuntu-latest
+    outputs:
+      solution-file: ${{ steps.export.outputs.file }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Power Platform CLI
+        run: |
+          dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Authenticate to Source
+        env:
+          DATAVERSE_URL: ${{ inputs.source-environment-url }}
+          CLIENT_ID: ${{ secrets.source-client-id }}
+          CLIENT_SECRET: ${{ secrets.source-client-secret }}
+          TENANT_ID: ${{ secrets.source-tenant-id }}
+        run: |
+          pac auth create \
+            --url "$DATAVERSE_URL" \
+            --applicationId "$CLIENT_ID" \
+            --clientSecret "$CLIENT_SECRET" \
+            --tenant "$TENANT_ID"
+
+      - name: Export Solution
+        id: export
+        env:
+          SOLUTION_NAME: ${{ inputs.solution-name }}
+          MANAGED: ${{ inputs.deploy-managed }}
+        run: |
+          mkdir -p ./export
+
+          SUFFIX=""
+          MANAGED_FLAG=""
+          if [ "$MANAGED" = "true" ]; then
+            SUFFIX="_managed"
+            MANAGED_FLAG="--managed"
+          fi
+
+          OUTPUT_FILE="./export/${SOLUTION_NAME}${SUFFIX}.zip"
+
+          echo "Exporting solution $SOLUTION_NAME..."
+          pac solution export \
+            --name "$SOLUTION_NAME" \
+            --path "$OUTPUT_FILE" \
+            $MANAGED_FLAG
+
+          echo "file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload Solution
+        uses: actions/upload-artifact@v4
+        with:
+          name: solution
+          path: ${{ inputs.working-directory }}/export/*.zip
+          retention-days: 7
+
+  import:
+    name: Import to Target
+    runs-on: ubuntu-latest
+    needs: export
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Solution
+        uses: actions/download-artifact@v4
+        with:
+          name: solution
+          path: ${{ inputs.working-directory }}/import
+
+      - name: Install Power Platform CLI
+        run: |
+          dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Authenticate to Target
+        env:
+          DATAVERSE_URL: ${{ inputs.target-environment-url }}
+          CLIENT_ID: ${{ secrets.target-client-id }}
+          CLIENT_SECRET: ${{ secrets.target-client-secret }}
+          TENANT_ID: ${{ secrets.target-tenant-id }}
+        run: |
+          pac auth create \
+            --url "$DATAVERSE_URL" \
+            --applicationId "$CLIENT_ID" \
+            --clientSecret "$CLIENT_SECRET" \
+            --tenant "$TENANT_ID"
+
+      - name: Import Solution
+        run: |
+          SOLUTION_FILE=$(find ./import -name "*.zip" | head -1)
+          echo "Importing $SOLUTION_FILE..."
+
+          pac solution import \
+            --path "$SOLUTION_FILE" \
+            --publish-changes \
+            --activate-plugins
+
+          echo "Solution import complete."
+
+  deploy-plugins:
+    name: Deploy Plugins
+    runs-on: ubuntu-latest
+    needs: import
+    if: ${{ inputs.deploy-plugins }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PPDS.Tools
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PPDS.Tools -Force -Scope CurrentUser
+          Import-Module PPDS.Tools
+
+      - name: Connect to Target
+        shell: pwsh
+        env:
+          DATAVERSE_URL: ${{ inputs.target-environment-url }}
+          CLIENT_ID: ${{ secrets.target-client-id }}
+          CLIENT_SECRET: ${{ secrets.target-client-secret }}
+          TENANT_ID: ${{ secrets.target-tenant-id }}
+        run: |
+          $secureSecret = ConvertTo-SecureString $env:CLIENT_SECRET -AsPlainText -Force
+          Connect-DataverseEnvironment `
+            -EnvironmentUrl $env:DATAVERSE_URL `
+            -ClientId $env:CLIENT_ID `
+            -ClientSecret $secureSecret `
+            -TenantId $env:TENANT_ID
+
+      - name: Deploy Plugins
+        shell: pwsh
+        run: |
+          Write-Host "Deploying plugins..."
+          Deploy-DataversePlugins `
+            -RegistrationFile "${{ inputs.plugin-registration-file }}" `
+            -DetectDrift
+          Write-Host "Plugin deployment complete."

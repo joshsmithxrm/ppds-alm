@@ -1,0 +1,116 @@
+# github/workflows/solution-import.yml
+# Reusable workflow: Import solution to Dataverse environment
+name: Import Solution
+
+on:
+  workflow_call:
+    inputs:
+      environment-url:
+        description: 'Dataverse environment URL (e.g., https://org.crm.dynamics.com)'
+        required: true
+        type: string
+      solution-file:
+        description: 'Path to the solution zip file to import'
+        required: true
+        type: string
+      publish-changes:
+        description: 'Publish customizations after import'
+        required: false
+        type: boolean
+        default: true
+      activate-plugins:
+        description: 'Activate plugin steps after import'
+        required: false
+        type: boolean
+        default: true
+      overwrite-unmanaged:
+        description: 'Overwrite unmanaged customizations'
+        required: false
+        type: boolean
+        default: false
+      working-directory:
+        description: 'Working directory for the workflow'
+        required: false
+        type: string
+        default: '.'
+    secrets:
+      client-id:
+        description: 'Azure AD application client ID'
+        required: true
+      client-secret:
+        description: 'Azure AD application client secret'
+        required: true
+      tenant-id:
+        description: 'Azure AD tenant ID'
+        required: true
+
+jobs:
+  import:
+    name: Import Solution
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Solution Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: solution-*
+          path: ${{ inputs.working-directory }}/artifacts
+        continue-on-error: true
+
+      - name: Install Power Platform CLI
+        run: |
+          dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Authenticate to Dataverse
+        env:
+          DATAVERSE_URL: ${{ inputs.environment-url }}
+          CLIENT_ID: ${{ secrets.client-id }}
+          CLIENT_SECRET: ${{ secrets.client-secret }}
+          TENANT_ID: ${{ secrets.tenant-id }}
+        run: |
+          pac auth create \
+            --url "$DATAVERSE_URL" \
+            --applicationId "$CLIENT_ID" \
+            --clientSecret "$CLIENT_SECRET" \
+            --tenant "$TENANT_ID"
+
+      - name: Import Solution
+        env:
+          SOLUTION_FILE: ${{ inputs.solution-file }}
+          PUBLISH: ${{ inputs.publish-changes }}
+          ACTIVATE: ${{ inputs.activate-plugins }}
+          OVERWRITE: ${{ inputs.overwrite-unmanaged }}
+        run: |
+          IMPORT_FLAGS=""
+
+          if [ "$PUBLISH" = "true" ]; then
+            IMPORT_FLAGS="$IMPORT_FLAGS --publish-changes"
+          fi
+
+          if [ "$ACTIVATE" = "true" ]; then
+            IMPORT_FLAGS="$IMPORT_FLAGS --activate-plugins"
+          fi
+
+          if [ "$OVERWRITE" = "true" ]; then
+            IMPORT_FLAGS="$IMPORT_FLAGS --force-overwrite"
+          fi
+
+          echo "Importing solution from $SOLUTION_FILE..."
+          pac solution import \
+            --path "$SOLUTION_FILE" \
+            $IMPORT_FLAGS
+
+          echo "Solution import complete."
+
+      - name: Publish Customizations
+        if: ${{ inputs.publish-changes }}
+        run: |
+          echo "Publishing all customizations..."
+          pac solution publish
+          echo "Publish complete."

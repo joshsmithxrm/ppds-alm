@@ -1,0 +1,235 @@
+# azure-devops/examples/advanced-pipeline.yml
+# Example: Multi-environment pipeline with approvals
+#
+# This example demonstrates:
+# - Export from Dev
+# - Build and test
+# - Deploy to Test with approval
+# - Deploy to Production with approval
+
+trigger:
+  branches:
+    include:
+      - main
+      - release/*
+
+resources:
+  repositories:
+    - repository: ppds-alm
+      type: github
+      name: joshsmithxrm/ppds-alm
+      ref: refs/tags/v1.0.0
+      endpoint: 'GitHub Connection'
+
+variables:
+  - name: solutionName
+    value: 'MySolution'
+
+stages:
+  # ============================================================
+  # Stage 1: Export and Build
+  # ============================================================
+  - stage: Build
+    displayName: 'Build & Export'
+    jobs:
+      - job: BuildPlugins
+        displayName: 'Build Plugin Assembly'
+        pool:
+          vmImage: 'windows-latest'
+        steps:
+          - checkout: self
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore'
+            inputs:
+              command: 'restore'
+              projects: '**/*.csproj'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Build'
+            inputs:
+              command: 'build'
+              projects: '**/*.csproj'
+              arguments: '--configuration Release'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Test'
+            inputs:
+              command: 'test'
+              projects: '**/*Tests.csproj'
+              arguments: '--configuration Release'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Plugin Assembly'
+            inputs:
+              targetPath: './src/Plugins/bin/Release'
+              artifact: 'plugins'
+
+  - stage: ExportDev
+    displayName: 'Export from Dev'
+    dependsOn: Build
+    jobs:
+      - job: Export
+        displayName: 'Export Solution'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: PowerPlatformToolInstaller@2
+            displayName: 'Install PP Tools'
+
+          - task: PowerPlatformExportSolution@2
+            displayName: 'Export Unmanaged'
+            inputs:
+              authenticationType: 'PowerPlatformSPN'
+              PowerPlatformSPN: 'Dataverse Dev'
+              Environment: 'https://myorg-dev.crm.dynamics.com'
+              SolutionName: $(solutionName)
+              SolutionOutputFile: './solutions/$(solutionName).zip'
+              Managed: false
+
+          - task: PowerPlatformExportSolution@2
+            displayName: 'Export Managed'
+            inputs:
+              authenticationType: 'PowerPlatformSPN'
+              PowerPlatformSPN: 'Dataverse Dev'
+              Environment: 'https://myorg-dev.crm.dynamics.com'
+              SolutionName: $(solutionName)
+              SolutionOutputFile: './solutions/$(solutionName)_managed.zip'
+              Managed: true
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Solutions'
+            inputs:
+              targetPath: './solutions'
+              artifact: 'solutions'
+
+  # ============================================================
+  # Stage 2: Deploy to Test (with approval)
+  # ============================================================
+  - stage: DeployTest
+    displayName: 'Deploy to Test'
+    dependsOn: ExportDev
+    condition: succeeded()
+    jobs:
+      - deployment: DeployToTest
+        displayName: 'Deploy to Test Environment'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'Test'  # Create this environment in Azure DevOps with approvals
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download Solution'
+                  inputs:
+                    buildType: 'current'
+                    artifactName: 'solutions'
+                    targetPath: './solutions'
+
+                - task: PowerPlatformToolInstaller@2
+                  displayName: 'Install PP Tools'
+
+                - task: PowerPlatformImportSolution@2
+                  displayName: 'Import Managed Solution'
+                  inputs:
+                    authenticationType: 'PowerPlatformSPN'
+                    PowerPlatformSPN: 'Dataverse Test'
+                    Environment: 'https://myorg-test.crm.dynamics.com'
+                    SolutionInputFile: './solutions/$(solutionName)_managed.zip'
+                    PublishWorkflows: true
+
+      - job: DeployPluginsTest
+        displayName: 'Deploy Plugins to Test'
+        dependsOn: DeployToTest
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: PowerShell@2
+            displayName: 'Install & Deploy Plugins'
+            inputs:
+              targetType: 'inline'
+              script: |
+                Set-PSRepository PSGallery -InstallationPolicy Trusted
+                Install-Module PPDS.Tools -Force -Scope CurrentUser
+                Import-Module PPDS.Tools
+
+                # Note: In production, use secure variables for credentials
+                Connect-DataverseEnvironment `
+                  -EnvironmentUrl "https://myorg-test.crm.dynamics.com" `
+                  -ClientId "$(ClientId)" `
+                  -ClientSecret (ConvertTo-SecureString "$(ClientSecret)" -AsPlainText -Force) `
+                  -TenantId "$(TenantId)"
+
+                Deploy-DataversePlugins `
+                  -RegistrationFile "./src/Plugins/registrations.json" `
+                  -DetectDrift
+              pwsh: true
+
+  # ============================================================
+  # Stage 3: Deploy to Production (with approval)
+  # ============================================================
+  - stage: DeployProd
+    displayName: 'Deploy to Production'
+    dependsOn: DeployTest
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployToProd
+        displayName: 'Deploy to Production Environment'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'Production'  # Create with required approvals and checks
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download Solution'
+                  inputs:
+                    buildType: 'current'
+                    artifactName: 'solutions'
+                    targetPath: './solutions'
+
+                - task: PowerPlatformToolInstaller@2
+                  displayName: 'Install PP Tools'
+
+                - task: PowerPlatformImportSolution@2
+                  displayName: 'Import Managed Solution'
+                  inputs:
+                    authenticationType: 'PowerPlatformSPN'
+                    PowerPlatformSPN: 'Dataverse Production'
+                    Environment: 'https://myorg.crm.dynamics.com'
+                    SolutionInputFile: './solutions/$(solutionName)_managed.zip'
+                    PublishWorkflows: true
+
+      - job: DeployPluginsProd
+        displayName: 'Deploy Plugins to Production'
+        dependsOn: DeployToProd
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: PowerShell@2
+            displayName: 'Install & Deploy Plugins'
+            inputs:
+              targetType: 'inline'
+              script: |
+                Set-PSRepository PSGallery -InstallationPolicy Trusted
+                Install-Module PPDS.Tools -Force -Scope CurrentUser
+                Import-Module PPDS.Tools
+
+                Connect-DataverseEnvironment `
+                  -EnvironmentUrl "https://myorg.crm.dynamics.com" `
+                  -ClientId "$(ProdClientId)" `
+                  -ClientSecret (ConvertTo-SecureString "$(ProdClientSecret)" -AsPlainText -Force) `
+                  -TenantId "$(TenantId)"
+
+                Deploy-DataversePlugins `
+                  -RegistrationFile "./src/Plugins/registrations.json" `
+                  -DetectDrift
+              pwsh: true

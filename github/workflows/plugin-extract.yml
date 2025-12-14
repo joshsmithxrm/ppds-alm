@@ -1,0 +1,65 @@
+# github/workflows/plugin-extract.yml
+# Reusable workflow: Extract plugin registrations from compiled assembly
+name: Extract Plugin Registrations
+
+on:
+  workflow_call:
+    inputs:
+      assembly-path:
+        description: 'Path to the compiled plugin assembly (.dll)'
+        required: true
+        type: string
+      output-path:
+        description: 'Path for the output registrations JSON file'
+        required: false
+        type: string
+        default: './registrations.json'
+      working-directory:
+        description: 'Working directory for the workflow'
+        required: false
+        type: string
+        default: '.'
+    outputs:
+      registration-file:
+        description: 'Path to the generated registrations file'
+        value: ${{ jobs.extract.outputs.registration-file }}
+
+jobs:
+  extract:
+    name: Extract Registrations
+    runs-on: ubuntu-latest
+    outputs:
+      registration-file: ${{ steps.extract.outputs.file }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PPDS.Tools
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PPDS.Tools -Force -Scope CurrentUser
+          Import-Module PPDS.Tools
+
+      - name: Extract Plugin Registrations
+        id: extract
+        shell: pwsh
+        run: |
+          Write-Host "Extracting plugin registrations from ${{ inputs.assembly-path }}..."
+
+          Get-DataversePluginRegistrations `
+            -AssemblyPath "${{ inputs.assembly-path }}" `
+            -OutputPath "${{ inputs.output-path }}"
+
+          Write-Host "Registrations extracted to ${{ inputs.output-path }}"
+          "file=${{ inputs.output-path }}" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Registrations Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-registrations
+          path: ${{ inputs.working-directory }}/${{ inputs.output-path }}
+          retention-days: 7

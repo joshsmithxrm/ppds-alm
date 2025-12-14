@@ -1,0 +1,83 @@
+# azure-devops/templates/solution-export.yml
+# Template: Export solution from Dataverse environment
+parameters:
+  - name: environmentUrl
+    displayName: 'Dataverse Environment URL'
+    type: string
+
+  - name: solutionName
+    displayName: 'Unique name of the solution to export'
+    type: string
+
+  - name: outputPath
+    displayName: 'Output directory for the exported solution'
+    type: string
+    default: './solutions'
+
+  - name: managed
+    displayName: 'Export as managed solution'
+    type: boolean
+    default: false
+
+  - name: serviceConnection
+    displayName: 'Azure Service Connection name'
+    type: string
+
+  - name: workingDirectory
+    displayName: 'Working directory'
+    type: string
+    default: '$(System.DefaultWorkingDirectory)'
+
+  - name: publishArtifact
+    displayName: 'Publish solution as artifact'
+    type: boolean
+    default: true
+
+stages:
+  - stage: ExportSolution
+    displayName: 'Export Solution'
+    jobs:
+      - job: Export
+        displayName: 'Export Solution from Dataverse'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: PowerPlatformToolInstaller@2
+            displayName: 'Install Power Platform Build Tools'
+            inputs:
+              DefaultVersion: true
+
+          - task: PowerPlatformSetConnectionVariables@2
+            displayName: 'Set Connection Variables'
+            inputs:
+              authenticationType: 'PowerPlatformSPN'
+              PowerPlatformSPN: ${{ parameters.serviceConnection }}
+
+          - task: PowerShell@2
+            displayName: 'Create Output Directory'
+            inputs:
+              targetType: 'inline'
+              script: |
+                New-Item -ItemType Directory -Force -Path "${{ parameters.outputPath }}"
+              pwsh: true
+              workingDirectory: ${{ parameters.workingDirectory }}
+
+          - task: PowerPlatformExportSolution@2
+            displayName: 'Export Solution'
+            inputs:
+              authenticationType: 'PowerPlatformSPN'
+              PowerPlatformSPN: ${{ parameters.serviceConnection }}
+              Environment: ${{ parameters.environmentUrl }}
+              SolutionName: ${{ parameters.solutionName }}
+              SolutionOutputFile: '${{ parameters.outputPath }}/${{ parameters.solutionName }}${{ parameters.managed }}_managed.zip'
+              Managed: ${{ parameters.managed }}
+
+          - ${{ if eq(parameters.publishArtifact, true) }}:
+            - task: PublishPipelineArtifact@1
+              displayName: 'Publish Solution Artifact'
+              inputs:
+                targetPath: '${{ parameters.workingDirectory }}/${{ parameters.outputPath }}'
+                artifact: 'solution-${{ parameters.solutionName }}'
+                publishLocation: 'pipeline'

@@ -1,0 +1,110 @@
+# github/workflows/solution-export.yml
+# Reusable workflow: Export solution from Dataverse environment
+name: Export Solution
+
+on:
+  workflow_call:
+    inputs:
+      environment-url:
+        description: 'Dataverse environment URL (e.g., https://org.crm.dynamics.com)'
+        required: true
+        type: string
+      solution-name:
+        description: 'Unique name of the solution to export'
+        required: true
+        type: string
+      output-path:
+        description: 'Output directory for the exported solution'
+        required: false
+        type: string
+        default: './solutions'
+      managed:
+        description: 'Export as managed solution'
+        required: false
+        type: boolean
+        default: false
+      working-directory:
+        description: 'Working directory for the workflow'
+        required: false
+        type: string
+        default: '.'
+    secrets:
+      client-id:
+        description: 'Azure AD application client ID'
+        required: true
+      client-secret:
+        description: 'Azure AD application client secret'
+        required: true
+      tenant-id:
+        description: 'Azure AD tenant ID'
+        required: true
+    outputs:
+      solution-file:
+        description: 'Path to the exported solution zip file'
+        value: ${{ jobs.export.outputs.solution-file }}
+
+jobs:
+  export:
+    name: Export Solution
+    runs-on: ubuntu-latest
+    outputs:
+      solution-file: ${{ steps.export.outputs.file }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Power Platform CLI
+        run: |
+          dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Authenticate to Dataverse
+        env:
+          DATAVERSE_URL: ${{ inputs.environment-url }}
+          CLIENT_ID: ${{ secrets.client-id }}
+          CLIENT_SECRET: ${{ secrets.client-secret }}
+          TENANT_ID: ${{ secrets.tenant-id }}
+        run: |
+          pac auth create \
+            --url "$DATAVERSE_URL" \
+            --applicationId "$CLIENT_ID" \
+            --clientSecret "$CLIENT_SECRET" \
+            --tenant "$TENANT_ID"
+
+      - name: Create Output Directory
+        run: mkdir -p "${{ inputs.output-path }}"
+
+      - name: Export Solution
+        id: export
+        env:
+          SOLUTION_NAME: ${{ inputs.solution-name }}
+          OUTPUT_PATH: ${{ inputs.output-path }}
+          MANAGED: ${{ inputs.managed }}
+        run: |
+          SUFFIX=""
+          MANAGED_FLAG=""
+          if [ "$MANAGED" = "true" ]; then
+            SUFFIX="_managed"
+            MANAGED_FLAG="--managed"
+          fi
+
+          OUTPUT_FILE="${OUTPUT_PATH}/${SOLUTION_NAME}${SUFFIX}.zip"
+
+          echo "Exporting solution $SOLUTION_NAME..."
+          pac solution export \
+            --name "$SOLUTION_NAME" \
+            --path "$OUTPUT_FILE" \
+            $MANAGED_FLAG
+
+          echo "Solution exported to $OUTPUT_FILE"
+          echo "file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload Solution Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solution-${{ inputs.solution-name }}${{ inputs.managed && '-managed' || '' }}
+          path: ${{ inputs.working-directory }}/${{ steps.export.outputs.file }}
+          retention-days: 30
