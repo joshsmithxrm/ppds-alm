@@ -103,7 +103,7 @@ jobs:
           echo "file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
 
       - name: Upload Solution Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: solution-${{ inputs.solution-name }}${{ inputs.managed && '-managed' || '' }}
           path: ${{ inputs.working-directory }}/${{ steps.export.outputs.file }}
