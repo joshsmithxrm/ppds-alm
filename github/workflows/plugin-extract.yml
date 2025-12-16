@@ -58,7 +58,7 @@ jobs:
           "file=${{ inputs.output-path }}" >> $env:GITHUB_OUTPUT
 
       - name: Upload Registrations Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: plugin-registrations
           path: ${{ inputs.working-directory }}/${{ inputs.output-path }}
