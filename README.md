@@ -1,39 +1,46 @@
 # PPDS ALM
 
-CI/CD pipeline templates for Power Platform and Dataverse development.
+CI/CD templates for Power Platform Application Lifecycle Management (ALM).
 
 Part of the [Power Platform Developer Suite](https://github.com/joshsmithxrm) ecosystem.
 
-## Overview
+## What's New in v2.0
 
-PPDS ALM provides reusable pipeline templates for both **GitHub Actions** and **Azure DevOps**, enabling automated:
+PPDS ALM v2 introduces enterprise-grade features for Power Platform deployments:
 
-- Plugin deployment with drift detection
-- Plugin registration extraction
-- Solution export and import
-- Complete ALM workflows
+- **Composite Actions** - 10 modular, reusable actions for building custom workflows
+- **Smart Import** - Version comparison skips unnecessary imports, retry logic handles transient failures
+- **Noise Filtering** - Automatically filters volatile export changes (timestamps, session IDs, etc.)
+- **Solution Checker** - Integrated PowerApps Solution Checker for quality validation
+- **Build Pipeline** - Full .NET build support for plugins with automatic solution integration
+- **Deployment Settings** - Auto-detection and application of environment-specific settings
+
+See [Migration Guide](./docs/migration-v2.md) for upgrading from v1.
 
 ## Quick Start
 
 ### GitHub Actions
 
 ```yaml
-name: Deploy Plugins
+name: Deploy to QA
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
 
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/.github/workflows/plugin-deploy.yml@v1
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
     with:
-      environment-url: 'https://myorg.crm.dynamics.com'
-      registration-file: './registrations.json'
+      solution-name: MySolution
+      solution-folder: solutions/MySolution/src
+      build-plugins: true
+      package-type: Managed
     secrets:
-      client-id: ${{ secrets.DATAVERSE_CLIENT_ID }}
-      client-secret: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
-      tenant-id: ${{ secrets.DATAVERSE_TENANT_ID }}
+      environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+      tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+      client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+      client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
 ```
 
 ### Azure DevOps
@@ -44,93 +51,167 @@ resources:
     - repository: ppds-alm
       type: github
       name: joshsmithxrm/ppds-alm
-      ref: refs/tags/v1.0.0
+      ref: refs/tags/v2.0.0
       endpoint: 'GitHub Connection'
 
 stages:
-  - template: azure-devops/templates/plugin-deploy.yml@ppds-alm
+  - template: azure-devops/templates/solution-deploy.yml@ppds-alm
     parameters:
-      environmentUrl: 'https://myorg.crm.dynamics.com'
-      registrationFile: './registrations.json'
-      serviceConnection: 'Dataverse Production'
+      solutionName: MySolution
+      solutionFolder: solutions/MySolution/src
+      serviceConnection: 'Dataverse QA'
 ```
 
-## Available Templates
+## Reusable Workflows
 
-### GitHub Actions (Reusable Workflows)
+| Workflow | Purpose |
+|----------|---------|
+| [`solution-export.yml`](./github/workflows/solution-export.yml) | Export solution from environment with noise filtering |
+| [`solution-import.yml`](./github/workflows/solution-import.yml) | Import solution with version check and retry logic |
+| [`solution-build.yml`](./github/workflows/solution-build.yml) | Build .NET code and pack solution |
+| [`solution-validate.yml`](./github/workflows/solution-validate.yml) | PR validation with build, pack, and Solution Checker |
+| [`solution-deploy.yml`](./github/workflows/solution-deploy.yml) | Full deployment: build, pack, import |
+| [`plugin-deploy.yml`](./github/workflows/plugin-deploy.yml) | Deploy plugins using PPDS.Tools |
+| [`plugin-extract.yml`](./github/workflows/plugin-extract.yml) | Extract plugin registrations from assembly |
+| [`full-alm.yml`](./github/workflows/full-alm.yml) | Complete ALM pipeline (export, build, deploy) |
 
-| Workflow | Description |
-|----------|-------------|
-| `plugin-deploy.yml` | Deploy plugins to Dataverse environment |
-| `plugin-extract.yml` | Extract plugin registrations from compiled assembly |
-| `solution-export.yml` | Export solution from Dataverse |
-| `solution-import.yml` | Import solution to Dataverse |
-| `full-alm.yml` | Complete ALM pipeline (export, import, deploy) |
+## Composite Actions
 
-### Azure DevOps Templates
+Granular, reusable actions for building custom workflows:
 
-| Template | Description |
-|----------|-------------|
-| `plugin-deploy.yml` | Deploy plugins to Dataverse environment |
-| `plugin-extract.yml` | Extract plugin registrations from compiled assembly |
-| `solution-export.yml` | Export solution from Dataverse |
-| `solution-import.yml` | Import solution to Dataverse |
-| `full-alm.yml` | Complete ALM pipeline (export, import, deploy) |
+| Action | Purpose |
+|--------|---------|
+| [`setup-pac-cli`](./.github/actions/setup-pac-cli) | Install .NET SDK and Power Platform CLI |
+| [`pac-auth`](./.github/actions/pac-auth) | Authenticate to Power Platform environment |
+| [`export-solution`](./.github/actions/export-solution) | Export and unpack solution |
+| [`import-solution`](./.github/actions/import-solution) | Import with version check and retry |
+| [`pack-solution`](./.github/actions/pack-solution) | Pack solution from source |
+| [`build-solution`](./.github/actions/build-solution) | Build .NET solution with tests |
+| [`check-solution`](./.github/actions/check-solution) | Run PowerApps Solution Checker |
+| [`analyze-changes`](./.github/actions/analyze-changes) | Filter noise from exports |
+| [`copy-plugin-assemblies`](./.github/actions/copy-plugin-assemblies) | Copy built DLLs to solution |
+| [`copy-plugin-packages`](./.github/actions/copy-plugin-packages) | Copy NuGet packages to solution |
+
+See [Actions Reference](./docs/actions-reference.md) for detailed documentation.
+
+## Key Features
+
+### Smart Import
+
+The import action automatically:
+- **Compares versions** - Skips import if target has same or newer version
+- **Retries transient failures** - Handles concurrent import conflicts with configurable retry
+- **Applies deployment settings** - Auto-detects environment-specific configuration files
+
+```yaml
+- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v2
+  with:
+    solution-path: ./exports/MySolution_managed.zip
+    solution-name: MySolution
+    skip-if-same-version: 'true'
+    max-retries: '3'
+    settings-file: ./config/qa.deploymentsettings.json
+```
+
+### Noise Filtering
+
+Solution exports often contain volatile changes that aren't real customizations:
+- Solution.xml version timestamps
+- Canvas app random URI suffixes
+- Workflow session IDs
+- Whitespace-only changes
+
+The `analyze-changes` action filters these, preventing unnecessary commits.
+
+### Solution Checker Integration
+
+Validate solution quality before deployment:
+
+```yaml
+- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v2
+  with:
+    solution-path: ./exports/MySolution_managed.zip
+    fail-on-level: High  # Critical, High, Medium, Low, Informational
+    geography: unitedstates
+```
 
 ## Documentation
 
+### Getting Started
 - [GitHub Actions Quickstart](./docs/github-quickstart.md)
 - [Azure DevOps Quickstart](./docs/azure-devops-quickstart.md)
 - [Authentication Setup](./docs/authentication.md)
+
+### Reference
+- [Actions Reference](./docs/actions-reference.md) - Detailed input/output docs for all actions
+- [Features Guide](./docs/features.md) - Deep dive into advanced features
 - [Troubleshooting](./docs/troubleshooting.md)
 
-## Prerequisites
+### Strategy Guides
+- [ALM Overview](./docs/strategy/ALM_OVERVIEW.md) - Philosophy and approach
+- [Branching Strategy](./docs/strategy/BRANCHING_STRATEGY.md) - Recommended git workflow
+- [Environment Strategy](./docs/strategy/ENVIRONMENT_STRATEGY.md) - Dev/QA/Prod patterns
 
-### For Plugin Operations
-- [PPDS.Tools](https://github.com/joshsmithxrm/ppds-tools) PowerShell module
-- Azure AD app registration with Dataverse access
-
-### For Solution Operations
-- Power Platform CLI (installed automatically)
-- Azure AD app registration with Dataverse access
+### Migration
+- [v2 Migration Guide](./docs/migration-v2.md) - Upgrading from v1
 
 ## Repository Structure
 
 ```
 ppds-alm/
 ├── .github/
+│   ├── actions/                    # Composite actions
+│   │   ├── setup-pac-cli/
+│   │   ├── pac-auth/
+│   │   ├── export-solution/
+│   │   ├── import-solution/
+│   │   ├── pack-solution/
+│   │   ├── build-solution/
+│   │   ├── check-solution/
+│   │   ├── analyze-changes/
+│   │   ├── copy-plugin-assemblies/
+│   │   └── copy-plugin-packages/
 │   └── workflows/
-│       └── ci.yml                    # CI for this repo
-│
+│       └── ci.yml                  # CI for this repo
 ├── github/
-│   └── workflows/                    # Reusable workflows for consumers
-│       ├── plugin-deploy.yml
-│       ├── plugin-extract.yml
+│   └── workflows/                  # Reusable workflows (workflow_call)
 │       ├── solution-export.yml
 │       ├── solution-import.yml
+│       ├── solution-build.yml
+│       ├── solution-validate.yml
+│       ├── solution-deploy.yml
+│       ├── plugin-deploy.yml
+│       ├── plugin-extract.yml
 │       └── full-alm.yml
-│
 ├── azure-devops/
-│   ├── templates/                    # Templates for consumers
-│   │   ├── plugin-deploy.yml
-│   │   ├── plugin-extract.yml
-│   │   ├── solution-export.yml
-│   │   ├── solution-import.yml
-│   │   └── full-alm.yml
-│   └── examples/
-│       ├── starter-pipeline.yml
-│       └── advanced-pipeline.yml
-│
+│   ├── templates/                  # Pipeline templates
+│   └── examples/                   # Example pipelines
 ├── docs/
 │   ├── github-quickstart.md
 │   ├── azure-devops-quickstart.md
 │   ├── authentication.md
-│   └── troubleshooting.md
-│
-├── README.md
-├── LICENSE
-└── CHANGELOG.md
+│   ├── actions-reference.md
+│   ├── features.md
+│   ├── troubleshooting.md
+│   ├── migration-v2.md
+│   └── strategy/
+│       ├── ALM_OVERVIEW.md
+│       ├── BRANCHING_STRATEGY.md
+│       └── ENVIRONMENT_STRATEGY.md
+├── CHANGELOG.md
+└── README.md
 ```
+
+## Versioning
+
+Use version tags for stability:
+
+| Tag | Description | Recommendation |
+|-----|-------------|----------------|
+| `@v2` | Latest v2.x release | Recommended for production |
+| `@v2.0.0` | Specific version | Maximum stability |
+| `@main` | Latest development | Not recommended for production |
+| `@v1` | Legacy v1.x | Use migration guide to upgrade |
 
 ## PPDS Ecosystem
 
@@ -142,14 +223,6 @@ ppds-alm/
 | **ppds-alm** | CI/CD Templates | Reference in pipelines |
 | [ppds-demo](https://github.com/joshsmithxrm/ppds-demo) | Reference Implementation | Clone |
 
-## Versioning
-
-Use version tags for stability:
-
-- `@v1` - Latest v1.x release (recommended for production)
-- `@v1.0.0` - Specific version
-- `@main` - Latest development (not recommended for production)
-
 ## Contributing
 
 Contributions are welcome! Please:
@@ -157,8 +230,9 @@ Contributions are welcome! Please:
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test with both GitHub Actions and Azure DevOps
-5. Submit a pull request
+4. Run actionlint on GitHub Actions workflows
+5. Test with actual CI/CD environment
+6. Submit a pull request
 
 ## License
 

@@ -1,205 +1,303 @@
 # Authentication Guide
 
-This guide explains how to set up authentication for PPDS ALM workflows and templates.
+This guide explains how to set up authentication for PPDS ALM pipelines.
 
 ## Overview
 
-PPDS ALM uses Azure AD app registrations to authenticate with Dataverse environments. This approach:
+PPDS ALM uses service principals (app registrations) to authenticate with Power Platform environments. This provides:
 
-- Works in unattended CI/CD scenarios
-- Supports least-privilege access
-- Is recommended by Microsoft for ALM scenarios
+- **Non-interactive authentication** for CI/CD pipelines
+- **Scoped permissions** without user credentials
+- **Audit trail** of automated actions
+- **Secret rotation** capability
 
-## Azure AD App Registration Setup
+## Prerequisites
 
-### 1. Create the App Registration
+- Azure AD access (to create app registrations)
+- Power Platform Admin Center access (to create application users)
+- Repository admin access (to configure secrets)
 
-1. Go to [Azure Portal](https://portal.azure.com) > **Azure Active Directory** > **App registrations**
-2. Click **New registration**
-3. Enter a name (e.g., "PPDS ALM - Dev", "PPDS ALM - Prod")
-4. Select **Accounts in this organizational directory only**
-5. Leave Redirect URI blank
-6. Click **Register**
+## Step 1: Create App Registration
 
-### 2. Create a Client Secret
+### Azure Portal
+
+1. Go to [Azure Portal](https://portal.azure.com) > Azure Active Directory
+2. Select **App registrations** > **New registration**
+3. Configure:
+   - **Name:** `Power Platform CI/CD` (or your preferred name)
+   - **Supported account types:** Single tenant
+   - **Redirect URI:** Leave blank
+4. Click **Register**
+5. Note the **Application (client) ID** and **Directory (tenant) ID**
+
+### Create Client Secret
 
 1. In your app registration, go to **Certificates & secrets**
 2. Click **New client secret**
-3. Enter a description and expiration period
-4. Click **Add**
-5. **Copy the secret value immediately** - you won't be able to see it again
+3. Add a description: `CI/CD Pipeline`
+4. Choose expiration: 6 months, 12 months, or 24 months
+5. Click **Add**
+6. **IMPORTANT:** Copy the secret **value** immediately (it won't be shown again)
 
-### 3. Grant API Permissions
+### Azure CLI Alternative
 
-1. Go to **API permissions**
-2. Click **Add a permission**
-3. Select **Dynamics CRM**
-4. Select **Delegated permissions**
-5. Check **user_impersonation**
-6. Click **Add permissions**
-7. Click **Grant admin consent** (requires admin rights)
+```bash
+# Create app registration
+az ad app create --display-name "Power Platform CI/CD"
 
-### 4. Create Application User in Dataverse
+# Get app ID
+APP_ID=$(az ad app list --display-name "Power Platform CI/CD" --query "[0].appId" -o tsv)
 
-1. Go to your Power Platform Admin Center
-2. Select your environment
-3. Click **Settings** > **Users + permissions** > **Application users**
-4. Click **New app user**
-5. Select your app registration
-6. Assign a security role (e.g., "System Administrator" for full access)
-7. Click **Create**
+# Create service principal
+az ad sp create --id $APP_ID
 
-## Required Values
+# Create client secret (expires in 1 year)
+az ad app credential reset --id $APP_ID --years 1
+```
 
-After setup, you'll need these values:
+## Step 2: Create Application User in Power Platform
 
-| Value | Where to Find |
-|-------|---------------|
-| Client ID | App registration > Overview > Application (client) ID |
-| Client Secret | The value you copied when creating the secret |
-| Tenant ID | App registration > Overview > Directory (tenant) ID |
-| Environment URL | Power Platform Admin Center > Environment > Environment URL |
+The app registration must be added as an application user in each target environment.
 
-## Configuring GitHub Actions
+### Power Platform Admin Center
 
-### Repository Secrets
+1. Go to [Power Platform Admin Center](https://admin.powerplatform.microsoft.com)
+2. Select **Environments** > Select your environment
+3. Go to **Settings** > **Users + permissions** > **Application users**
+4. Click **+ New app user**
+5. Click **+ Add an app** and search for your app registration
+6. Select your **Business unit** (usually the root)
+7. Under **Security roles**, select:
+   - **System Administrator** for full access, OR
+   - Custom role with required permissions
+8. Click **Create**
 
-1. Go to your GitHub repository
-2. Navigate to **Settings > Secrets and variables > Actions**
-3. Add the following secrets:
+### Repeat for Each Environment
 
-| Secret Name | Value |
-|-------------|-------|
-| `DATAVERSE_CLIENT_ID` | Your app's Client ID |
-| `DATAVERSE_CLIENT_SECRET` | Your app's Client Secret |
-| `DATAVERSE_TENANT_ID` | Your Azure AD Tenant ID |
+Create application users in all environments:
+- Dev environment
+- QA environment
+- Prod environment (when ready)
 
-### Using in Workflows
+### PAC CLI Alternative
+
+```bash
+pac admin assign-user \
+  --environment "https://myorg-dev.crm.dynamics.com" \
+  --user "<app-id>" \
+  --role "System Administrator"
+```
+
+## Step 3: Configure Repository Secrets
+
+### GitHub Actions
+
+#### Using GitHub Environments (Recommended for v2)
+
+1. Go to repository **Settings** > **Environments**
+2. Create environments: `Dev`, `QA`, `Prod`
+3. For each environment, add:
+
+**Variables:**
+| Name | Description | Example |
+|------|-------------|---------|
+| `POWERPLATFORM_ENVIRONMENT_URL` | Environment URL | `https://myorg-qa.crm.dynamics.com/` |
+| `POWERPLATFORM_TENANT_ID` | Azure AD tenant ID | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| `POWERPLATFORM_CLIENT_ID` | App registration client ID | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+
+**Secrets:**
+| Name | Description |
+|------|-------------|
+| `POWERPLATFORM_CLIENT_SECRET` | App registration client secret |
+
+#### Using Repository Secrets (Legacy/Simple Setup)
+
+If not using environments:
+
+1. Go to repository **Settings** > **Secrets and variables** > **Actions**
+2. Add secrets:
+   - `DATAVERSE_DEV_URL`
+   - `DATAVERSE_QA_URL`
+   - `DATAVERSE_PROD_URL`
+   - `DATAVERSE_TENANT_ID`
+   - `DATAVERSE_CLIENT_ID`
+   - `DATAVERSE_CLIENT_SECRET`
+
+#### Workflow Usage (v2)
 
 ```yaml
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/.github/workflows/plugin-deploy.yml@v1
+    environment: QA  # Uses QA environment secrets
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
     with:
-      environment-url: 'https://myorg.crm.dynamics.com'
+      solution-name: MySolution
+      solution-folder: solutions/MySolution/src
     secrets:
-      client-id: ${{ secrets.DATAVERSE_CLIENT_ID }}
-      client-secret: ${{ secrets.DATAVERSE_CLIENT_SECRET }}
-      tenant-id: ${{ secrets.DATAVERSE_TENANT_ID }}
+      environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+      tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+      client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+      client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
 ```
 
-### Multi-Environment Setup
+### Azure DevOps
 
-For separate dev/test/prod environments, create separate secrets:
+#### Service Connection (Recommended)
 
-| Secret | Description |
-|--------|-------------|
-| `DEV_CLIENT_ID` | Dev environment client ID |
-| `DEV_CLIENT_SECRET` | Dev environment client secret |
-| `TEST_CLIENT_ID` | Test environment client ID |
-| `TEST_CLIENT_SECRET` | Test environment client secret |
-| `PROD_CLIENT_ID` | Production environment client ID |
-| `PROD_CLIENT_SECRET` | Production environment client secret |
-| `TENANT_ID` | Shared tenant ID (if same tenant) |
-
-## Configuring Azure DevOps
-
-### Option 1: Power Platform Service Connection
-
-1. Go to **Project Settings > Service connections**
+1. Go to **Project Settings** > **Service connections**
 2. Click **New service connection**
 3. Select **Power Platform**
 4. Fill in:
-   - **Server URL**: Your environment URL
-   - **Tenant ID**: Your Azure AD tenant ID
-   - **Application ID**: Your app's Client ID
-   - **Client secret**: Your app's Client Secret
-5. Name it descriptively (e.g., "Dataverse Dev")
+   - Server URL: Environment URL
+   - Tenant ID: Azure AD tenant ID
+   - Application ID: App registration client ID
+   - Client Secret: App registration secret
+5. Name it descriptively: `Dataverse-QA`
 6. Click **Save**
 
-### Option 2: Azure Resource Manager Connection
+#### Variable Groups
 
-1. Go to **Project Settings > Service connections**
-2. Click **New service connection**
-3. Select **Azure Resource Manager**
-4. Select **Service principal (manual)**
-5. Fill in:
-   - **Subscription ID**: Your Azure subscription
-   - **Subscription Name**: Any name
-   - **Service Principal ID**: Your app's Client ID
-   - **Service Principal Key**: Your app's Client Secret
-   - **Tenant ID**: Your Azure AD tenant ID
-6. Click **Verify and save**
+For custom scripts:
 
-### Using in Pipelines
-
-```yaml
-stages:
-  - template: azure-devops/templates/plugin-deploy.yml@ppds-alm
-    parameters:
-      environmentUrl: 'https://myorg.crm.dynamics.com'
-      serviceConnection: 'Dataverse Prod'  # Name of your service connection
-```
+1. Go to **Pipelines** > **Library**
+2. Create variable groups: `PowerPlatform-Dev`, `PowerPlatform-QA`, `PowerPlatform-Prod`
+3. Add variables (mark secrets appropriately):
+   - `EnvironmentUrl`
+   - `TenantId`
+   - `ClientId`
+   - `ClientSecret` (secret)
 
 ## Security Best Practices
 
 ### Principle of Least Privilege
 
-Create separate app registrations for different environments:
-
 | Environment | Recommended Role |
-|-------------|-----------------|
-| Development | System Administrator |
-| Test | System Customizer |
-| Production | Custom role with minimal permissions |
+|-------------|------------------|
+| Dev | System Administrator |
+| QA | System Customizer + Solution import |
+| Prod | Custom role (minimal permissions) |
 
-### Custom Security Role
+### Production Custom Role
 
 For production, create a custom security role with only:
-
+- Solution: Read, Write (import)
 - Plugin Assembly: Create, Read, Write, Delete
 - Plugin Step: Create, Read, Write, Delete
-- Solution: Read (for solution import)
-- System Jobs: Read (for monitoring)
+- Customization: Publish All
+- System Job: Read (monitoring)
 
 ### Secret Rotation
 
-1. **Set expiration reminders** for client secrets
-2. **Rotate secrets regularly** (every 6-12 months)
-3. **Use Azure Key Vault** for enterprise scenarios
-4. **Monitor for secret exposure** in repository scans
+1. Create new secret before old one expires
+2. Update GitHub/Azure DevOps secrets
+3. Verify pipelines still work
+4. Delete old secret
 
-### Separate Credentials per Environment
+**Recommended schedule:** Every 6-12 months
 
-- Never use production credentials in dev/test
-- Use separate app registrations per environment
-- Different people can manage different credentials
+### Monitoring
+
+Monitor service principal usage:
+1. Azure AD > App registrations > Sign-in logs
+2. Power Platform Admin Center > Analytics > Activity logging
 
 ## Troubleshooting
 
 ### "AADSTS700016: Application not found"
 
-- Verify the Client ID is correct
-- Ensure the app registration exists in the correct tenant
+- Verify Client ID is correct
+- Ensure app registration is in the correct tenant
+- Check for typos
 
-### "The user is not a member of the organization"
+### "AADSTS7000215: Invalid client secret"
 
-- The application user hasn't been created in Dataverse
-- Create the application user in the Power Platform Admin Center
+- Verify you're using the secret **value**, not **ID**
+- Check if secret has expired
+- Create a new secret and update configuration
+
+### "User is not a member of the organization"
+
+- Application user doesn't exist in Dataverse
+- Create application user in Power Platform Admin Center
+- Ensure correct Business Unit
 
 ### "Insufficient privileges"
 
-- The application user doesn't have the required security role
-- Assign appropriate security roles to the application user
+- Check security roles assigned to application user
+- Ensure solution import permissions are granted
+- Consider using System Administrator for troubleshooting
 
-### "Invalid client secret"
+## Verification
 
-- The secret may have expired
-- Verify you're using the secret **value**, not the secret **ID**
-- Create a new secret if needed
+Test authentication before using in pipelines:
 
-## Additional Resources
+### PAC CLI
 
-- [Microsoft: Use service principal authentication](https://learn.microsoft.com/en-us/power-platform/alm/devops-build-tools#create-service-principal-and-client-secret-using-the-power-platform-admin-center)
-- [Microsoft: Application user management](https://learn.microsoft.com/en-us/power-platform/admin/manage-application-users)
-- [Power Platform ALM documentation](https://learn.microsoft.com/en-us/power-platform/alm/)
+```bash
+# Create auth profile
+pac auth create \
+  --environment "https://myorg.crm.dynamics.com" \
+  --tenant "<tenant-id>" \
+  --applicationId "<client-id>" \
+  --clientSecret "<client-secret>"
+
+# Test by listing solutions
+pac solution list
+```
+
+### PowerShell (PPDS.Tools)
+
+```powershell
+# Install module
+Install-Module PPDS.Tools -Force
+
+# Connect
+Connect-DataverseEnvironment `
+  -EnvironmentUrl "https://myorg.crm.dynamics.com" `
+  -TenantId "<tenant-id>" `
+  -ClientId "<client-id>" `
+  -ClientSecret "<client-secret>"
+
+# Test connection
+Get-DataversePluginAssembly | Select-Object Name -First 5
+```
+
+## Multi-Environment Configuration
+
+### Configuration File Pattern
+
+Create deployment settings for each environment:
+
+```
+config/
+├── MySolution.dev.deploymentsettings.json
+├── MySolution.qa.deploymentsettings.json
+└── MySolution.prod.deploymentsettings.json
+```
+
+### Connection Reference Mapping
+
+Example deployment settings:
+```json
+{
+  "EnvironmentVariables": [
+    {
+      "SchemaName": "new_ApiEndpoint",
+      "Value": "https://qa-api.example.com"
+    }
+  ],
+  "ConnectionReferences": [
+    {
+      "LogicalName": "new_sharedcommondataserviceforapps_abc123",
+      "ConnectionId": "shared-commondata-qa-connection-id"
+    }
+  ]
+}
+```
+
+## See Also
+
+- [GitHub Actions Quickstart](./github-quickstart.md)
+- [Azure DevOps Quickstart](./azure-devops-quickstart.md)
+- [Troubleshooting](./troubleshooting.md)
+- [Microsoft Authentication Documentation](https://learn.microsoft.com/en-us/power-platform/alm/devops-build-tools#configure-service-connections)
