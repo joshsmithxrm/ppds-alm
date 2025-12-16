@@ -1,0 +1,284 @@
+# =============================================================================
+# Reusable Workflow: Build Solution
+# =============================================================================
+# Builds a Power Platform solution including optional .NET code compilation.
+# This workflow is designed for CI/CD scenarios where you want to build and
+# validate the solution without deploying it.
+#
+# Features:
+#   - Optional .NET solution build for plugins/custom code
+#   - Optional unit test execution
+#   - Plugin assembly/package copy to solution folder
+#   - Pack solution to zip file (both Managed and Unmanaged)
+#   - Build artifact upload
+#
+# Usage:
+#   jobs:
+#     build:
+#       uses: joshsmithxrm/ppds-alm/github/workflows/solution-build.yml@v2
+#       with:
+#         solution-name: MySolution
+#         solution-folder: solutions/MySolution/src
+#         build-plugins: 'true'
+#         dotnet-solution-path: MySolution.sln
+#         run-tests: 'true'
+#         package-type: Both
+#
+# =============================================================================
+
+name: Build Solution
+
+on:
+  workflow_call:
+    inputs:
+      solution-name:
+        description: 'Solution unique name'
+        required: true
+        type: string
+      solution-folder:
+        description: 'Path to unpacked solution folder (e.g., solutions/MySolution/src)'
+        required: true
+        type: string
+      output-folder:
+        description: 'Output folder for packed solution files'
+        required: false
+        type: string
+        default: './exports'
+      package-type:
+        description: 'Package type to build: Managed, Unmanaged, or Both'
+        required: false
+        type: string
+        default: 'Both'
+      build-plugins:
+        description: 'Build .NET solution for plugins/custom code'
+        required: false
+        type: boolean
+        default: false
+      dotnet-solution-path:
+        description: 'Path to .NET solution file (required if build-plugins is true)'
+        required: false
+        type: string
+        default: ''
+      run-tests:
+        description: 'Run unit tests during .NET build'
+        required: false
+        type: boolean
+        default: false
+      configuration:
+        description: 'Build configuration (Debug or Release)'
+        required: false
+        type: string
+        default: 'Release'
+
+    outputs:
+      solution-path:
+        description: 'Path to primary packed solution file'
+        value: ${{ jobs.pack.outputs.primary-solution-path }}
+      build-succeeded:
+        description: 'Whether .NET build succeeded (empty if not run)'
+        value: ${{ jobs.build.outputs.build-succeeded }}
+      test-succeeded:
+        description: 'Whether tests succeeded (empty if not run)'
+        value: ${{ jobs.build.outputs.test-succeeded }}
+      version:
+        description: 'Solution version'
+        value: ${{ jobs.prepare.outputs.version }}
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      has-plugins: ${{ steps.check-plugins.outputs.has-plugins }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Get solution version
+        id: get-version
+        run: |
+          SOLUTION_XML="${{ inputs.solution-folder }}/Other/Solution.xml"
+          if [ -f "$SOLUTION_XML" ]; then
+            VERSION=$(grep -oP '(?<=<Version>)[^<]+' "$SOLUTION_XML" | head -1 || echo "unknown")
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Solution version: $VERSION"
+          else
+            echo "version=unknown" >> $GITHUB_OUTPUT
+            echo "::warning::Solution.xml not found"
+          fi
+
+      - name: Check for plugin folders
+        id: check-plugins
+        run: |
+          HAS_PLUGINS="false"
+          if [ -d "${{ inputs.solution-folder }}/PluginAssemblies" ] || [ -d "${{ inputs.solution-folder }}/pluginpackages" ]; then
+            HAS_PLUGINS="true"
+          fi
+          echo "has-plugins=$HAS_PLUGINS" >> $GITHUB_OUTPUT
+          echo "Has plugin folders: $HAS_PLUGINS"
+
+  build:
+    name: Build .NET Solution
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: inputs.build-plugins
+
+    outputs:
+      build-succeeded: ${{ steps.build.outputs.build-succeeded }}
+      test-succeeded: ${{ steps.build.outputs.test-succeeded }}
+      classic-assembly: ${{ steps.build.outputs.classic-assembly-path }}
+      plugin-package: ${{ steps.build.outputs.plugin-package-path }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Build solution
+        id: build
+        uses: ./.github/actions/build-solution
+        with:
+          solution-path: ${{ inputs.dotnet-solution-path }}
+          configuration: ${{ inputs.configuration }}
+          run-tests: ${{ inputs.run-tests && 'true' || 'false' }}
+
+      - name: Copy plugin assemblies
+        if: steps.build.outputs.classic-assembly-path != '' && needs.prepare.outputs.has-plugins == 'true'
+        uses: ./.github/actions/copy-plugin-assemblies
+        with:
+          source-assembly: ${{ steps.build.outputs.classic-assembly-path }}
+          solution-folder: ${{ inputs.solution-folder }}
+
+      - name: Copy plugin packages
+        if: steps.build.outputs.plugin-package-path != '' && needs.prepare.outputs.has-plugins == 'true'
+        uses: ./.github/actions/copy-plugin-packages
+        with:
+          source-package: ${{ steps.build.outputs.plugin-package-path }}
+          solution-folder: ${{ inputs.solution-folder }}
+
+      - name: Upload updated solution folder
+        uses: actions/upload-artifact@v6
+        with:
+          name: solution-${{ inputs.solution-name }}-built
+          path: ${{ inputs.solution-folder }}
+          retention-days: 7
+
+  pack:
+    name: Pack Solution
+    runs-on: ubuntu-latest
+    needs: [prepare, build]
+    if: always() && !failure()
+
+    outputs:
+      primary-solution-path: ${{ steps.pack-managed.outputs.solution-path || steps.pack-unmanaged.outputs.solution-path }}
+      managed-path: ${{ steps.pack-managed.outputs.solution-path }}
+      unmanaged-path: ${{ steps.pack-unmanaged.outputs.solution-path }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download built solution
+        if: inputs.build-plugins
+        uses: actions/download-artifact@v7
+        with:
+          name: solution-${{ inputs.solution-name }}-built
+          path: ${{ inputs.solution-folder }}
+        continue-on-error: true
+
+      - name: Setup PAC CLI
+        uses: ./.github/actions/setup-pac-cli
+
+      - name: Pack Managed solution
+        id: pack-managed
+        if: inputs.package-type == 'Managed' || inputs.package-type == 'Both'
+        uses: ./.github/actions/pack-solution
+        with:
+          solution-folder: ${{ inputs.solution-folder }}
+          solution-name: ${{ inputs.solution-name }}
+          output-folder: ${{ inputs.output-folder }}
+          package-type: 'Managed'
+
+      - name: Pack Unmanaged solution
+        id: pack-unmanaged
+        if: inputs.package-type == 'Unmanaged' || inputs.package-type == 'Both'
+        uses: ./.github/actions/pack-solution
+        with:
+          solution-folder: ${{ inputs.solution-folder }}
+          solution-name: ${{ inputs.solution-name }}
+          output-folder: ${{ inputs.output-folder }}
+          package-type: 'Unmanaged'
+
+      - name: Upload solution packages
+        uses: actions/upload-artifact@v6
+        with:
+          name: solution-${{ inputs.solution-name }}-packages
+          path: ${{ inputs.output-folder }}/*.zip
+          retention-days: 30
+
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [prepare, build, pack]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Solution | ${{ inputs.solution-name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ needs.prepare.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Configuration | ${{ inputs.configuration }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Package Type | ${{ inputs.package-type }} |" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Build status (if applicable)
+          if [ "${{ inputs.build-plugins }}" = "true" ]; then
+            if [ "${{ needs.build.result }}" = "success" ]; then
+              echo "| .NET Build | **Success** |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| .NET Build | **Failed** |" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            if [ "${{ inputs.run-tests }}" = "true" ]; then
+              if [ "${{ needs.build.outputs.test-succeeded }}" = "true" ]; then
+                echo "| Tests | **Passed** |" >> $GITHUB_STEP_SUMMARY
+              elif [ "${{ needs.build.outputs.test-succeeded }}" = "skipped" ]; then
+                echo "| Tests | Skipped |" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "| Tests | **Failed** |" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+          else
+            echo "| .NET Build | Skipped |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Pack status
+          if [ "${{ needs.pack.result }}" = "success" ]; then
+            echo "| Pack | **Success** |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Pack | **Failed** |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Artifact info
+          if [ "${{ needs.pack.result }}" = "success" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ -n "${{ needs.pack.outputs.managed-path }}" ]; then
+              echo "- Managed: \`$(basename "${{ needs.pack.outputs.managed-path }}")\`" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            if [ -n "${{ needs.pack.outputs.unmanaged-path }}" ]; then
+              echo "- Unmanaged: \`$(basename "${{ needs.pack.outputs.unmanaged-path }}")\`" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi

@@ -136,43 +136,43 @@ This migration absorbs the proven ALM implementation from ppds-demo into ppds-al
 
 ### Phase 2: Create/Update Reusable Workflows
 
-- [ ] **2.1** Create `_setup-environment.yml` (new)
-  - [ ] Combines setup-pac-cli and pac-auth
-  - [ ] Standardized inputs/secrets
-- [ ] **2.2** Update `solution-export.yml`
-  - [ ] Use new export-solution action
-  - [ ] Add noise filtering option
-  - [ ] Add version stamping option
-  - [ ] Maintain backward-compatible inputs where possible
-- [ ] **2.3** Update `solution-import.yml`
-  - [ ] Use new import-solution action
-  - [ ] Add version comparison option
-  - [ ] Add retry configuration
-  - [ ] Add deployment settings support
-- [ ] **2.4** Create `solution-build.yml` (new)
-  - [ ] Use build-solution action
-  - [ ] Use copy-plugin-* actions
-  - [ ] Use pack-solution action
-  - [ ] Output artifact
-- [ ] **2.5** Create `solution-validate.yml` (new)
-  - [ ] Build and pack validation
-  - [ ] Solution Checker integration
-  - [ ] PR validation use case
-- [ ] **2.6** Create `solution-deploy.yml` (new)
-  - [ ] Based on _deploy-solution.yml from demo
-  - [ ] Environment-based deployment
-  - [ ] Optional plugin build
-  - [ ] Deployment settings auto-detection
-- [ ] **2.7** Update `plugin-deploy.yml`
-  - [ ] Decide: Keep PPDS.Tools or migrate to PAC CLI
-  - [ ] Update inputs for consistency
-- [ ] **2.8** Update `plugin-extract.yml`
-  - [ ] Decide: Keep PPDS.Tools or migrate
-  - [ ] Update inputs for consistency
-- [ ] **2.9** Update `full-alm.yml`
-  - [ ] Orchestrate new workflows
-  - [ ] Add build step
-  - [ ] Add validation step
+- [x] **2.1** ~~Create `_setup-environment.yml` (new)
+  - Kept setup-pac-cli and pac-auth separate for flexibility-pac-cli and pac-auth
+  - Workflows chain them directly without a wrapper/secrets
+- [x] **2.2** Update `solution-export.yml`
+  - [x] Use new export-solution action
+  - [x] Add noise filtering option
+  - [x] Add version stamping option
+  - [x] Use secrets-based authentication-compatible inputs where possible
+- [x] **2.3** Update `solution-import.yml`
+  - [x] Use new import-solution action
+  - [x] Add version comparison option
+  - [x] Add retry configuration
+  - [x] Add deployment settings support
+- [x] **2.4** Create `solution-build.yml` (new)
+  - [x] Use build-solution action
+  - [x] Use copy-plugin-* actions
+  - [x] Use pack-solution action
+  - [x] Output artifact
+- [x] **2.5** Create `solution-validate.yml` (new)
+  - [x] Build and pack validation
+  - [x] Solution Checker integration
+  - [x] PR validation use case
+- [x] **2.6** Create `solution-deploy.yml` (new)
+  - [x] Based on _deploy-solution.yml from demo
+  - [x] Secrets-based authentication deployment
+  - [x] Optional plugin build
+  - [x] Deployment settings auto-detection
+- [x] **2.7** Update `plugin-deploy.yml`
+  - [x] Decision made: Keep PPDS.Tools or migrate to PAC CLI
+  - [x] Update inputs for consistency
+- [x] **2.8** Update `plugin-extract.yml`
+  - [x] Decision made: Keep PPDS.Tools or migrate
+  - [x] Update inputs for consistency
+- [x] **2.9** Update `full-alm.yml`
+  - [x] Use composite actions to orchestrate new workflows
+  - [x] Add build step
+  - [x] Add PPDS plugin deployment step
 
 ### Phase 3: Update Azure DevOps Templates
 

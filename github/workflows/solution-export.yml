@@ -1,110 +1,193 @@
-# github/workflows/solution-export.yml
-# Reusable workflow: Export solution from Dataverse environment
+# =============================================================================
+# Reusable Workflow: Export Solution
+# =============================================================================
+# Exports a Power Platform solution from a Dataverse environment and unpacks
+# it to source control format.
+#
+# Features:
+#   - Publishes customizations before export (ensures up-to-date)
+#   - Exports both managed and unmanaged (packagetype Both)
+#   - Optional noise filtering (filters volatile changes)
+#   - Optional version stamping
+#
+# Usage:
+#   jobs:
+#     export:
+#       uses: joshsmithxrm/ppds-alm/github/workflows/solution-export.yml@v2
+#       with:
+#         solution-name: MySolution
+#         output-folder: solutions/MySolution/src
+#       secrets:
+#         environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+#         tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+#         client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+#         client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
+#
+# =============================================================================
+
 name: Export Solution
 
 on:
   workflow_call:
     inputs:
-      environment-url:
-        description: 'Dataverse environment URL (e.g., https://org.crm.dynamics.com)'
-        required: true
-        type: string
       solution-name:
-        description: 'Unique name of the solution to export'
+        description: 'Solution unique name to export'
         required: true
         type: string
-      output-path:
-        description: 'Output directory for the exported solution'
+      output-folder:
+        description: 'Folder for unpacked solution (e.g., solutions/MySolution/src)'
+        required: true
+        type: string
+      temp-folder:
+        description: 'Temporary folder for zip files'
         required: false
         type: string
-        default: './solutions'
-      managed:
-        description: 'Export as managed solution'
+        default: './exports'
+      filter-noise:
+        description: 'Filter noise changes from export (version stamps, volatile URIs)'
+        required: false
+        type: boolean
+        default: true
+      set-version:
+        description: 'Version to stamp on solution before export (empty = no version update)'
+        required: false
+        type: string
+        default: ''
+      debug:
+        description: 'Enable debug logging for noise filtering'
         required: false
         type: boolean
         default: false
-      working-directory:
-        description: 'Working directory for the workflow'
-        required: false
-        type: string
-        default: '.'
+
     secrets:
-      client-id:
-        description: 'Azure AD application client ID'
-        required: true
-      client-secret:
-        description: 'Azure AD application client secret'
+      environment-url:
+        description: 'Power Platform environment URL'
         required: true
       tenant-id:
         description: 'Azure AD tenant ID'
         required: true
+      client-id:
+        description: 'Service principal client ID'
+        required: true
+      client-secret:
+        description: 'Service principal client secret'
+        required: true
+
     outputs:
-      solution-file:
-        description: 'Path to the exported solution zip file'
-        value: ${{ jobs.export.outputs.solution-file }}
+      solution-folder:
+        description: 'Path to unpacked solution folder'
+        value: ${{ jobs.export.outputs.solution-folder }}
+      has-real-changes:
+        description: 'Whether real (non-noise) changes were detected'
+        value: ${{ jobs.export.outputs.has-real-changes }}
+      change-summary:
+        description: 'Summary of changes detected'
+        value: ${{ jobs.export.outputs.change-summary }}
+      version:
+        description: 'Version of exported solution'
+        value: ${{ jobs.export.outputs.version }}
 
 jobs:
   export:
     name: Export Solution
     runs-on: ubuntu-latest
+
     outputs:
-      solution-file: ${{ steps.export.outputs.file }}
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
+      solution-folder: ${{ inputs.output-folder }}
+      has-real-changes: ${{ steps.analyze.outputs.has-real-changes || steps.analyze-skip.outputs.has-real-changes }}
+      change-summary: ${{ steps.analyze.outputs.change-summary || steps.analyze-skip.outputs.change-summary }}
+      version: ${{ steps.get-version.outputs.version }}
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - name: Install Power Platform CLI
+      - name: Setup PAC CLI
+        uses: ./.github/actions/setup-pac-cli
+
+      - name: Authenticate to environment
+        uses: ./.github/actions/pac-auth
+        with:
+          environment-url: ${{ secrets.environment-url }}
+          tenant-id: ${{ secrets.tenant-id }}
+          client-id: ${{ secrets.client-id }}
+          client-secret: ${{ secrets.client-secret }}
+
+      - name: Set solution version
+        if: inputs.set-version != ''
         run: |
-          dotnet tool install --global Microsoft.PowerApps.CLI.Tool
-          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+          echo "Setting solution version to ${{ inputs.set-version }}"
+          pac solution online-version \
+            --solution-name "${{ inputs.solution-name }}" \
+            --solution-version "${{ inputs.set-version }}"
+          echo "Version set successfully"
 
-      - name: Authenticate to Dataverse
-        env:
-          DATAVERSE_URL: ${{ inputs.environment-url }}
-          CLIENT_ID: ${{ secrets.client-id }}
-          CLIENT_SECRET: ${{ secrets.client-secret }}
-          TENANT_ID: ${{ secrets.tenant-id }}
+      - name: Export solution
+        uses: ./.github/actions/export-solution
+        with:
+          solution-name: ${{ inputs.solution-name }}
+          output-folder: ${{ inputs.output-folder }}
+          temp-folder: ${{ inputs.temp-folder }}
+
+      - name: Get exported version
+        id: get-version
         run: |
-          pac auth create \
-            --url "$DATAVERSE_URL" \
-            --applicationId "$CLIENT_ID" \
-            --clientSecret "$CLIENT_SECRET" \
-            --tenant "$TENANT_ID"
-
-      - name: Create Output Directory
-        run: mkdir -p "${{ inputs.output-path }}"
-
-      - name: Export Solution
-        id: export
-        env:
-          SOLUTION_NAME: ${{ inputs.solution-name }}
-          OUTPUT_PATH: ${{ inputs.output-path }}
-          MANAGED: ${{ inputs.managed }}
-        run: |
-          SUFFIX=""
-          MANAGED_FLAG=""
-          if [ "$MANAGED" = "true" ]; then
-            SUFFIX="_managed"
-            MANAGED_FLAG="--managed"
+          SOLUTION_XML="${{ inputs.output-folder }}/Other/Solution.xml"
+          if [ -f "$SOLUTION_XML" ]; then
+            VERSION=$(grep -oP '(?<=<Version>)[^<]+' "$SOLUTION_XML" | head -1 || echo "unknown")
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Exported solution version: $VERSION"
+          else
+            echo "version=unknown" >> $GITHUB_OUTPUT
+            echo "::warning::Solution.xml not found"
           fi
 
-          OUTPUT_FILE="${OUTPUT_PATH}/${SOLUTION_NAME}${SUFFIX}.zip"
+      - name: Stage changes
+        run: git add -A
 
-          echo "Exporting solution $SOLUTION_NAME..."
-          pac solution export \
-            --name "$SOLUTION_NAME" \
-            --path "$OUTPUT_FILE" \
-            $MANAGED_FLAG
+      - name: Analyze changes for noise
+        id: analyze
+        if: inputs.filter-noise
+        uses: ./.github/actions/analyze-changes
+        with:
+          solution-folder: ${{ inputs.output-folder }}
+          debug: ${{ inputs.debug && 'true' || 'false' }}
 
-          echo "Solution exported to $OUTPUT_FILE"
-          echo "file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+      - name: Skip noise analysis
+        id: analyze-skip
+        if: inputs.filter-noise == false
+        run: |
+          if git diff --cached --quiet; then
+            echo "has-real-changes=false" >> $GITHUB_OUTPUT
+            echo "change-summary=No changes detected" >> $GITHUB_OUTPUT
+          else
+            CHANGE_COUNT=$(git diff --cached --name-only | wc -l)
+            echo "has-real-changes=true" >> $GITHUB_OUTPUT
+            echo "change-summary=$CHANGE_COUNT changes (noise filter disabled)" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Upload Solution Artifact
+      - name: Upload solution artifact
         uses: actions/upload-artifact@v6
         with:
-          name: solution-${{ inputs.solution-name }}${{ inputs.managed && '-managed' || '' }}
-          path: ${{ inputs.working-directory }}/${{ steps.export.outputs.file }}
-          retention-days: 30
+          name: solution-${{ inputs.solution-name }}-source
+          path: ${{ inputs.output-folder }}
+          retention-days: 7
+
+      - name: Export summary
+        run: |
+          echo "## Export Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Solution | ${{ inputs.solution-name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ steps.get-version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Output | \`${{ inputs.output-folder }}\` |" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.filter-noise }}" = "true" ]; then
+            echo "| Real Changes | ${{ steps.analyze.outputs.real-count || '0' }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Noise Filtered | ${{ steps.analyze.outputs.noise-count || '0' }} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Noise Filter | Disabled |" >> $GITHUB_STEP_SUMMARY
+          fi

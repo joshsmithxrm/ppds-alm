@@ -1,0 +1,352 @@
+# =============================================================================
+# Reusable Workflow: Deploy Solution
+# =============================================================================
+# Builds and deploys a Power Platform solution to a target environment.
+# This workflow combines build, pack, and import into a single deployment flow.
+#
+# Features:
+#   - Optional .NET solution build for plugins/custom code
+#   - Plugin assembly/package copy to solution folder
+#   - Pack solution to zip file
+#   - Import to target environment with version checking
+#   - Deployment settings auto-detection
+#   - Smart retry logic for transient failures
+#
+# Usage:
+#   jobs:
+#     deploy:
+#       uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+#       with:
+#         solution-name: MySolution
+#         solution-folder: solutions/MySolution/src
+#         build-plugins: 'true'
+#         dotnet-solution-path: MySolution.sln
+#         package-type: Managed
+#       secrets:
+#         environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+#         tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+#         client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+#         client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
+#
+# =============================================================================
+
+name: Deploy Solution
+
+on:
+  workflow_call:
+    inputs:
+      solution-name:
+        description: 'Solution unique name'
+        required: true
+        type: string
+      solution-folder:
+        description: 'Path to unpacked solution folder (e.g., solutions/MySolution/src)'
+        required: true
+        type: string
+      build-plugins:
+        description: 'Build .NET solution for plugins/custom code'
+        required: false
+        type: boolean
+        default: false
+      dotnet-solution-path:
+        description: 'Path to .NET solution file (required if build-plugins is true)'
+        required: false
+        type: string
+        default: ''
+      package-type:
+        description: 'Package type to deploy: Managed or Unmanaged'
+        required: false
+        type: string
+        default: 'Managed'
+      skip-if-same-version:
+        description: 'Skip import if target has same or newer version'
+        required: false
+        type: boolean
+        default: true
+      max-retries:
+        description: 'Maximum retry attempts for transient failures'
+        required: false
+        type: number
+        default: 3
+      settings-file:
+        description: 'Path to deployment settings JSON file (empty for auto-detection)'
+        required: false
+        type: string
+        default: ''
+
+    secrets:
+      environment-url:
+        description: 'Target Dataverse environment URL'
+        required: true
+      tenant-id:
+        description: 'Azure AD tenant ID'
+        required: true
+      client-id:
+        description: 'Service principal client ID'
+        required: true
+      client-secret:
+        description: 'Service principal client secret'
+        required: true
+
+    outputs:
+      deployed:
+        description: 'Whether deployment completed successfully'
+        value: ${{ jobs.import.outputs.deployed }}
+      skipped:
+        description: 'Whether deployment was skipped (version match)'
+        value: ${{ jobs.import.outputs.skipped }}
+      version:
+        description: 'Solution version that was deployed'
+        value: ${{ jobs.prepare.outputs.version }}
+      build-succeeded:
+        description: 'Whether .NET build succeeded (empty if not run)'
+        value: ${{ jobs.build.outputs.build-succeeded }}
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      has-plugins: ${{ steps.check-plugins.outputs.has-plugins }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Get solution version
+        id: get-version
+        run: |
+          SOLUTION_XML="${{ inputs.solution-folder }}/Other/Solution.xml"
+          if [ -f "$SOLUTION_XML" ]; then
+            VERSION=$(grep -oP '(?<=<Version>)[^<]+' "$SOLUTION_XML" | head -1 || echo "unknown")
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Solution version: $VERSION"
+          else
+            echo "version=unknown" >> $GITHUB_OUTPUT
+            echo "::warning::Solution.xml not found"
+          fi
+
+      - name: Check for plugin folders
+        id: check-plugins
+        run: |
+          HAS_PLUGINS="false"
+          if [ -d "${{ inputs.solution-folder }}/PluginAssemblies" ] || [ -d "${{ inputs.solution-folder }}/pluginpackages" ]; then
+            HAS_PLUGINS="true"
+          fi
+          echo "has-plugins=$HAS_PLUGINS" >> $GITHUB_OUTPUT
+          echo "Has plugin folders: $HAS_PLUGINS"
+
+  build:
+    name: Build Plugins
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: inputs.build-plugins
+
+    outputs:
+      build-succeeded: ${{ steps.build.outputs.build-succeeded }}
+      classic-assembly: ${{ steps.build.outputs.classic-assembly-path }}
+      plugin-package: ${{ steps.build.outputs.plugin-package-path }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Build solution
+        id: build
+        uses: ./.github/actions/build-solution
+        with:
+          solution-path: ${{ inputs.dotnet-solution-path }}
+          configuration: Release
+          run-tests: 'false'
+
+      - name: Copy plugin assemblies
+        if: steps.build.outputs.classic-assembly-path != '' && needs.prepare.outputs.has-plugins == 'true'
+        uses: ./.github/actions/copy-plugin-assemblies
+        with:
+          source-assembly: ${{ steps.build.outputs.classic-assembly-path }}
+          solution-folder: ${{ inputs.solution-folder }}
+
+      - name: Copy plugin packages
+        if: steps.build.outputs.plugin-package-path != '' && needs.prepare.outputs.has-plugins == 'true'
+        uses: ./.github/actions/copy-plugin-packages
+        with:
+          source-package: ${{ steps.build.outputs.plugin-package-path }}
+          solution-folder: ${{ inputs.solution-folder }}
+
+      - name: Upload updated solution folder
+        uses: actions/upload-artifact@v6
+        with:
+          name: solution-${{ inputs.solution-name }}-built
+          path: ${{ inputs.solution-folder }}
+          retention-days: 7
+
+  pack:
+    name: Pack Solution
+    runs-on: ubuntu-latest
+    needs: [prepare, build]
+    if: always() && !failure()
+
+    outputs:
+      solution-path: ${{ steps.pack.outputs.solution-path }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download built solution
+        if: inputs.build-plugins
+        uses: actions/download-artifact@v7
+        with:
+          name: solution-${{ inputs.solution-name }}-built
+          path: ${{ inputs.solution-folder }}
+        continue-on-error: true
+
+      - name: Setup PAC CLI
+        uses: ./.github/actions/setup-pac-cli
+
+      - name: Pack solution
+        id: pack
+        uses: ./.github/actions/pack-solution
+        with:
+          solution-folder: ${{ inputs.solution-folder }}
+          solution-name: ${{ inputs.solution-name }}
+          output-folder: ./exports
+          package-type: ${{ inputs.package-type }}
+
+      - name: Upload solution package
+        uses: actions/upload-artifact@v6
+        with:
+          name: solution-${{ inputs.solution-name }}-package
+          path: ${{ steps.pack.outputs.solution-path }}
+          retention-days: 7
+
+  import:
+    name: Import to Environment
+    runs-on: ubuntu-latest
+    needs: [prepare, pack]
+
+    outputs:
+      deployed: ${{ steps.import.outputs.imported }}
+      skipped: ${{ steps.import.outputs.skipped }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download solution package
+        uses: actions/download-artifact@v7
+        with:
+          name: solution-${{ inputs.solution-name }}-package
+          path: ./exports
+
+      - name: Setup PAC CLI
+        uses: ./.github/actions/setup-pac-cli
+
+      - name: Authenticate to environment
+        uses: ./.github/actions/pac-auth
+        with:
+          environment-url: ${{ secrets.environment-url }}
+          tenant-id: ${{ secrets.tenant-id }}
+          client-id: ${{ secrets.client-id }}
+          client-secret: ${{ secrets.client-secret }}
+
+      - name: Detect deployment settings file
+        id: detect-settings
+        run: |
+          PACKAGE_TYPE_LOWER=$(echo "${{ inputs.package-type }}" | tr '[:upper:]' '[:lower:]')
+          SOLUTION_PATH="./exports/${{ inputs.solution-name }}_${PACKAGE_TYPE_LOWER}.zip"
+
+          # Use provided settings file or auto-detect
+          if [ -n "${{ inputs.settings-file }}" ]; then
+            SETTINGS_FILE="${{ inputs.settings-file }}"
+            echo "Using provided settings file: $SETTINGS_FILE"
+          else
+            # Auto-detect deployment settings file
+            # Convention: {SolutionName}.{Environment}.deploymentsettings.json
+            # Try to detect environment name from URL
+            ENV_URL="${{ secrets.environment-url }}"
+            ENV_NAME=$(echo "$ENV_URL" | sed -E 's|https://([^.]+)\..*|\1|')
+
+            SETTINGS_FILE=""
+
+            # Try specific environment name
+            if [ -f "./config/${{ inputs.solution-name }}.${ENV_NAME}.deploymentsettings.json" ]; then
+              SETTINGS_FILE="./config/${{ inputs.solution-name }}.${ENV_NAME}.deploymentsettings.json"
+            # Try generic
+            elif [ -f "./config/${{ inputs.solution-name }}.deploymentsettings.json" ]; then
+              SETTINGS_FILE="./config/${{ inputs.solution-name }}.deploymentsettings.json"
+            # Try at solution folder level
+            elif [ -f "${{ inputs.solution-folder }}/../config/${{ inputs.solution-name }}.deploymentsettings.json" ]; then
+              SETTINGS_FILE="${{ inputs.solution-folder }}/../config/${{ inputs.solution-name }}.deploymentsettings.json"
+            fi
+
+            if [ -n "$SETTINGS_FILE" ]; then
+              echo "Auto-detected settings file: $SETTINGS_FILE"
+            else
+              echo "No deployment settings file found"
+            fi
+          fi
+
+          echo "settings-file=$SETTINGS_FILE" >> $GITHUB_OUTPUT
+          echo "solution-path=$SOLUTION_PATH" >> $GITHUB_OUTPUT
+
+      - name: Import solution
+        id: import
+        uses: ./.github/actions/import-solution
+        with:
+          solution-path: ${{ steps.detect-settings.outputs.solution-path }}
+          solution-name: ${{ inputs.solution-name }}
+          skip-if-same-version: ${{ inputs.skip-if-same-version && 'true' || 'false' }}
+          max-retries: ${{ inputs.max-retries }}
+          settings-file: ${{ steps.detect-settings.outputs.settings-file }}
+          publish-changes: 'true'
+
+  summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [prepare, build, pack, import]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Solution | ${{ inputs.solution-name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ needs.prepare.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Package Type | ${{ inputs.package-type }} |" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Build status (if applicable)
+          if [ "${{ inputs.build-plugins }}" = "true" ]; then
+            if [ "${{ needs.build.result }}" = "success" ]; then
+              echo "| Build | **Success** |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Build | **Failed** |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| Build | Skipped |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Pack status
+          if [ "${{ needs.pack.result }}" = "success" ]; then
+            echo "| Pack | **Success** |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Pack | **Failed** |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Import status
+          if [ "${{ needs.import.outputs.skipped }}" = "true" ]; then
+            echo "| Import | **Skipped** (version match) |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.import.result }}" = "success" ]; then
+            echo "| Import | **Success** |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Import | **Failed** |" >> $GITHUB_STEP_SUMMARY
+          fi
