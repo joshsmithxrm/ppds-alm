@@ -243,3 +243,34 @@ Maintain docs in `docs/` for consumers:
 - **azure-devops-quickstart.md** - Azure DevOps setup
 - **authentication.md** - Credential setup guide
 - **troubleshooting.md** - Common issues
+
+---
+
+## Testing Requirements
+
+CI/CD templates cannot be unit tested - they must be run in actual CI/CD environments.
+
+**Before PR:**
+1. **YAML linting:** Run `actionlint` on GitHub Actions workflows
+2. **Syntax validation:** Ensure YAML parses correctly
+3. **Manual verification:** Create a test branch in `ppds-demo` that references your ALM branch, run the workflow, verify it works
+
+```bash
+# Install actionlint (one-time)
+# https://github.com/rhysd/actionlint
+
+# Lint GitHub Actions workflows
+actionlint github/workflows/*.yml
+```
+
+---
+
+## Decision Presentation
+
+When presenting choices or asking questions:
+1. **Lead with your recommendation** and rationale
+2. **List alternatives considered** and why they're not preferred
+3. **Ask for confirmation**, not open-ended input
+
+❌ "What testing approach should we use?"
+✅ "I recommend X because Y. Alternatives considered: A (rejected because B), C (rejected because D). Do you agree?"
