@@ -68,10 +68,14 @@ ppds-alm/
 │       ├── starter-pipeline.yml
 │       └── advanced-pipeline.yml
 ├── docs/
-│   ├── github-quickstart.md
-│   ├── azure-devops-quickstart.md
-│   ├── authentication.md
-│   └── troubleshooting.md
+│   ├── GITHUB_QUICKSTART.md
+│   ├── AZURE_DEVOPS_QUICKSTART.md
+│   ├── AUTHENTICATION.md
+│   ├── ACTIONS_REFERENCE.md
+│   ├── FEATURES.md
+│   ├── MIGRATION_V2.md
+│   ├── TROUBLESHOOTING.md
+│   └── strategy/
 └── CHANGELOG.md
 ```
 
@@ -269,10 +273,12 @@ CI/CD templates cannot be unit tested - they must be run in actual CI/CD environ
 ## 📚 Documentation
 
 Maintain docs in `docs/` for consumers:
-- **github-quickstart.md** - GitHub Actions setup
-- **azure-devops-quickstart.md** - Azure DevOps setup
-- **authentication.md** - Credential setup guide
-- **troubleshooting.md** - Common issues
+- **GITHUB_QUICKSTART.md** - GitHub Actions setup
+- **AZURE_DEVOPS_QUICKSTART.md** - Azure DevOps setup
+- **AUTHENTICATION.md** - Credential setup guide
+- **ACTIONS_REFERENCE.md** - Detailed action documentation
+- **FEATURES.md** - Advanced features guide
+- **TROUBLESHOOTING.md** - Common issues
 
 ---
 

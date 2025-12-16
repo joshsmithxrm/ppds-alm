@@ -15,7 +15,7 @@ PPDS ALM v2 introduces enterprise-grade features for Power Platform deployments:
 - **Build Pipeline** - Full .NET build support for plugins with automatic solution integration
 - **Deployment Settings** - Auto-detection and application of environment-specific settings
 
-See [Migration Guide](./docs/migration-v2.md) for upgrading from v1.
+See [Migration Guide](./docs/MIGRATION_V2.md) for upgrading from v1.
 
 ## Quick Start
 
@@ -92,7 +92,7 @@ Granular, reusable actions for building custom workflows:
 | [`copy-plugin-assemblies`](./.github/actions/copy-plugin-assemblies) | Copy built DLLs to solution |
 | [`copy-plugin-packages`](./.github/actions/copy-plugin-packages) | Copy NuGet packages to solution |
 
-See [Actions Reference](./docs/actions-reference.md) for detailed documentation.
+See [Actions Reference](./docs/ACTIONS_REFERENCE.md) for detailed documentation.
 
 ## Key Features
 
@@ -138,14 +138,14 @@ Validate solution quality before deployment:
 ## Documentation
 
 ### Getting Started
-- [GitHub Actions Quickstart](./docs/github-quickstart.md)
-- [Azure DevOps Quickstart](./docs/azure-devops-quickstart.md)
-- [Authentication Setup](./docs/authentication.md)
+- [GitHub Actions Quickstart](./docs/GITHUB_QUICKSTART.md)
+- [Azure DevOps Quickstart](./docs/AZURE_DEVOPS_QUICKSTART.md)
+- [Authentication Setup](./docs/AUTHENTICATION.md)
 
 ### Reference
-- [Actions Reference](./docs/actions-reference.md) - Detailed input/output docs for all actions
-- [Features Guide](./docs/features.md) - Deep dive into advanced features
-- [Troubleshooting](./docs/troubleshooting.md)
+- [Actions Reference](./docs/ACTIONS_REFERENCE.md) - Detailed input/output docs for all actions
+- [Features Guide](./docs/FEATURES.md) - Deep dive into advanced features
+- [Troubleshooting](./docs/TROUBLESHOOTING.md)
 
 ### Strategy Guides
 - [ALM Overview](./docs/strategy/ALM_OVERVIEW.md) - Philosophy and approach
@@ -153,7 +153,7 @@ Validate solution quality before deployment:
 - [Environment Strategy](./docs/strategy/ENVIRONMENT_STRATEGY.md) - Dev/QA/Prod patterns
 
 ### Migration
-- [v2 Migration Guide](./docs/migration-v2.md) - Upgrading from v1
+- [v2 Migration Guide](./docs/MIGRATION_V2.md) - Upgrading from v1
 
 ## Repository Structure
 
