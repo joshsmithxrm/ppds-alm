@@ -2,8 +2,6 @@
 
 This guide shows you how to use PPDS ALM templates in your Azure DevOps pipelines.
 
-> **Note:** Azure DevOps templates are planned for Phase 3 of the v2 migration. Currently, the templates follow v1 patterns. This guide describes the intended v2 functionality.
-
 ## Prerequisites
 
 1. An Azure DevOps project with your Power Platform solution
@@ -35,7 +33,7 @@ resources:
     - repository: ppds-alm
       type: github
       name: joshsmithxrm/ppds-alm
-      ref: refs/tags/v2.0.0
+      ref: refs/tags/v1.0.0
       endpoint: 'GitHub Connection'  # Your GitHub service connection name
 ```
 
@@ -54,7 +52,7 @@ resources:
     - repository: ppds-alm
       type: github
       name: joshsmithxrm/ppds-alm
-      ref: refs/tags/v2.0.0
+      ref: refs/tags/v1.0.0
       endpoint: 'GitHub Connection'
 
 stages:
@@ -106,7 +104,7 @@ resources:
     - repository: ppds-alm
       type: github
       name: joshsmithxrm/ppds-alm
-      ref: refs/tags/v2.0.0
+      ref: refs/tags/v1.0.0
       endpoint: 'GitHub'
 
 stages:
@@ -132,7 +130,7 @@ resources:
     - repository: ppds-alm
       type: github
       name: joshsmithxrm/ppds-alm
-      ref: refs/tags/v2.0.0
+      ref: refs/tags/v1.0.0
       endpoint: 'GitHub'
 
 stages:
@@ -195,7 +193,7 @@ resources:
     - repository: ppds-alm
       type: github
       name: joshsmithxrm/ppds-alm
-      ref: refs/tags/v2.0.0
+      ref: refs/tags/v1.0.0
       endpoint: 'GitHub'
 
 stages:
@@ -227,7 +225,7 @@ resources:
     - repository: ppds-alm
       type: github
       name: joshsmithxrm/ppds-alm
-      ref: refs/tags/v2.0.0
+      ref: refs/tags/v1.0.0
       endpoint: 'GitHub'
 
 stages:
@@ -366,4 +364,3 @@ See [Authentication Guide](./authentication.md) for detailed setup instructions.
 - [GitHub Actions Quickstart](./github-quickstart.md) - GitHub-specific guide
 - [Authentication Guide](./authentication.md) - Service principal setup
 - [Troubleshooting](./troubleshooting.md) - Common issues
-- [Migration Guide](./migration-v2.md) - Upgrading from v1

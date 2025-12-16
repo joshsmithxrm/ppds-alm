@@ -4,19 +4,6 @@ CI/CD templates for Power Platform Application Lifecycle Management (ALM).
 
 Part of the [Power Platform Developer Suite](https://github.com/joshsmithxrm) ecosystem.
 
-## What's New in v2.0
-
-PPDS ALM v2 introduces enterprise-grade features for Power Platform deployments:
-
-- **Composite Actions** - 10 modular, reusable actions for building custom workflows
-- **Smart Import** - Version comparison skips unnecessary imports, retry logic handles transient failures
-- **Noise Filtering** - Automatically filters volatile export changes (timestamps, session IDs, etc.)
-- **Solution Checker** - Integrated PowerApps Solution Checker for quality validation
-- **Build Pipeline** - Full .NET build support for plugins with automatic solution integration
-- **Deployment Settings** - Auto-detection and application of environment-specific settings
-
-See [Migration Guide](./docs/MIGRATION_V2.md) for upgrading from v1.
-
 ## Quick Start
 
 ### GitHub Actions
@@ -30,7 +17,7 @@ on:
 
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -51,7 +38,7 @@ resources:
     - repository: ppds-alm
       type: github
       name: joshsmithxrm/ppds-alm
-      ref: refs/tags/v2.0.0
+      ref: refs/tags/v1.0.0
       endpoint: 'GitHub Connection'
 
 stages:
@@ -104,7 +91,7 @@ The import action automatically:
 - **Applies deployment settings** - Auto-detects environment-specific configuration files
 
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v1
   with:
     solution-path: ./exports/MySolution_managed.zip
     solution-name: MySolution
@@ -128,7 +115,7 @@ The `analyze-changes` action filters these, preventing unnecessary commits.
 Validate solution quality before deployment:
 
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v1
   with:
     solution-path: ./exports/MySolution_managed.zip
     fail-on-level: High  # Critical, High, Medium, Low, Informational
@@ -151,9 +138,6 @@ Validate solution quality before deployment:
 - [ALM Overview](./docs/strategy/ALM_OVERVIEW.md) - Philosophy and approach
 - [Branching Strategy](./docs/strategy/BRANCHING_STRATEGY.md) - Recommended git workflow
 - [Environment Strategy](./docs/strategy/ENVIRONMENT_STRATEGY.md) - Dev/QA/Prod patterns
-
-### Migration
-- [v2 Migration Guide](./docs/MIGRATION_V2.md) - Upgrading from v1
 
 ## Repository Structure
 
@@ -193,7 +177,6 @@ ppds-alm/
 │   ├── actions-reference.md
 │   ├── features.md
 │   ├── troubleshooting.md
-│   ├── migration-v2.md
 │   └── strategy/
 │       ├── ALM_OVERVIEW.md
 │       ├── BRANCHING_STRATEGY.md
@@ -208,10 +191,9 @@ Use version tags for stability:
 
 | Tag | Description | Recommendation |
 |-----|-------------|----------------|
-| `@v2` | Latest v2.x release | Recommended for production |
-| `@v2.0.0` | Specific version | Maximum stability |
+| `@v1` | Latest v1.x release | Recommended for production |
+| `@v1.0.0` | Specific version | Maximum stability |
 | `@main` | Latest development | Not recommended for production |
-| `@v1` | Legacy v1.x | Use migration guide to upgrade |
 
 ## PPDS Ecosystem
 

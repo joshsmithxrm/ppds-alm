@@ -1,6 +1,6 @@
 # GitHub Actions Quickstart
 
-This guide shows you how to use PPDS ALM v2 reusable workflows and composite actions in your GitHub Actions pipelines.
+This guide shows you how to use PPDS ALM reusable workflows and composite actions in your GitHub Actions pipelines.
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ on:
 
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -94,7 +94,7 @@ on:
 
 jobs:
   export:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-export.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-export.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -118,7 +118,7 @@ on:
 
 jobs:
   validate:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-validate.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-validate.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -146,7 +146,7 @@ on:
 jobs:
   deploy:
     environment: Prod  # Requires approval if configured
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -171,7 +171,7 @@ on:
 
 jobs:
   build:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-build.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-build.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -181,7 +181,7 @@ jobs:
   deploy-qa:
     needs: build
     environment: QA
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -195,7 +195,7 @@ jobs:
   deploy-prod:
     needs: deploy-qa
     environment: Prod
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -224,10 +224,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup PAC CLI
-        uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v2
+        uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v1
 
       - name: Authenticate
-        uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v2
+        uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v1
         with:
           environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
           tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
@@ -235,14 +235,14 @@ jobs:
           client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
 
       - name: Export solution
-        uses: joshsmithxrm/ppds-alm/.github/actions/export-solution@v2
+        uses: joshsmithxrm/ppds-alm/.github/actions/export-solution@v1
         with:
           solution-name: MySolution
           output-folder: solutions/MySolution/src
 
       - name: Analyze changes
         id: analyze
-        uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v2
+        uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v1
         with:
           solution-folder: solutions/MySolution/src
 
@@ -302,16 +302,16 @@ Use version tags to ensure stability:
 
 | Tag | Description | When to Use |
 |-----|-------------|-------------|
-| `@v2` | Latest v2.x | Recommended for production |
-| `@v2.0.0` | Specific version | Maximum stability |
+| `@v1` | Latest v1.x | Recommended for production |
+| `@v1.0.0` | Specific version | Maximum stability |
 | `@main` | Latest development | Testing only |
 
 ```yaml
 # Recommended: major version tag
-uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
 
 # Locked to specific version
-uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2.0.0
+uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1.0.0
 ```
 
 ## Troubleshooting
@@ -320,7 +320,7 @@ uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2.0.0
 
 - Verify the repository path: `joshsmithxrm/ppds-alm`
 - Check the workflow path matches exactly
-- Ensure you're using a valid ref (`@v2`, `@main`, etc.)
+- Ensure you're using a valid ref (`@v1`, `@main`, etc.)
 
 ### Authentication Failed
 
@@ -358,4 +358,3 @@ See [Troubleshooting](./troubleshooting.md) for more help.
 - [Actions Reference](./actions-reference.md) - Detailed action documentation
 - [Features Guide](./features.md) - Advanced feature explanations
 - [Authentication](./authentication.md) - Credential setup guide
-- [Migration Guide](./migration-v2.md) - Upgrading from v1

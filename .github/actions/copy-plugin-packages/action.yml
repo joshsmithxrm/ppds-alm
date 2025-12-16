@@ -21,7 +21,7 @@
 #
 # Usage:
 #   - name: Copy plugin packages
-#     uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-packages@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-packages@v1
 #     with:
 #       source-package: src/PluginPackages/MyProject.PluginPackage/bin/Release/prefix_MyProject.PluginPackage.1.0.0.nupkg
 #       solution-folder: solutions/MySolution/src

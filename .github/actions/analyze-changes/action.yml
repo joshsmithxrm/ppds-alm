@@ -11,7 +11,7 @@
 #
 # Usage:
 #   - name: Analyze changes for noise
-#     uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v1
 #     with:
 #       solution-folder: solutions/MySolution/src
 #       debug: 'false'

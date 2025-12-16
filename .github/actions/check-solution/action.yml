@@ -10,7 +10,7 @@
 #
 # Usage:
 #   - name: Check solution quality
-#     uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v1
 #     with:
 #       solution-path: ./exports/MySolution_managed.zip
 #       fail-on-level: High

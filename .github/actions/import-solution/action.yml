@@ -13,7 +13,7 @@
 #
 # Usage:
 #   - name: Import solution
-#     uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v1
 #     with:
 #       solution-path: ./exports/MySolution_managed.zip
 #       solution-name: MySolution

@@ -12,7 +12,7 @@
 # Usage:
 #   jobs:
 #     import:
-#       uses: joshsmithxrm/ppds-alm/github/workflows/solution-import.yml@v2
+#       uses: joshsmithxrm/ppds-alm/github/workflows/solution-import.yml@v1
 #       with:
 #         solution-path: ./exports/MySolution_managed.zip
 #         solution-name: MySolution

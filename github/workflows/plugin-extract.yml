@@ -6,7 +6,7 @@
 # Usage:
 #   jobs:
 #     extract:
-#       uses: joshsmithxrm/ppds-alm/github/workflows/plugin-extract.yml@v2
+#       uses: joshsmithxrm/ppds-alm/github/workflows/plugin-extract.yml@v1
 #       with:
 #         assembly-path: ./src/Plugins/bin/Release/net462/MyPlugins.dll
 #

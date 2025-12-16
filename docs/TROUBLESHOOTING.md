@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-This guide helps resolve common issues with PPDS ALM v2 workflows and actions.
+This guide helps resolve common issues with PPDS ALM workflows and actions.
 
 ## Authentication Errors
 
@@ -57,7 +57,7 @@ This guide helps resolve common issues with PPDS ALM v2 workflows and actions.
 
 **Solution (if you want to force import):**
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v1
   with:
     solution-path: ./MySolution_managed.zip
     skip-if-same-version: 'false'
@@ -67,7 +67,7 @@ This guide helps resolve common issues with PPDS ALM v2 workflows and actions.
 
 **Cause:** Another import is in progress in the same environment.
 
-**Default Behavior:** v2 automatically retries up to 3 times with 5-minute delays.
+**Default Behavior:** The import action automatically retries up to 3 times with 5-minute delays.
 
 **If retries fail:**
 1. Check if another pipeline is running against the same environment
@@ -120,13 +120,13 @@ with:
 
 **Cause:** Known PAC CLI bug on Linux runners.
 
-**Solution:** PPDS ALM v2 includes automatic workaround:
+**Solution:** PPDS ALM includes automatic workaround:
 - The `export-solution` action deletes the solution folder before unpack
 - Removed components are properly deleted
 - If unpack fails, the folder is restored from git
 
 **If you see this issue:**
-1. Ensure you're using v2 actions
+1. Ensure you're using the PPDS ALM actions
 2. Check that the workaround is functioning (folder should be deleted before unpack in logs)
 
 ### Export produces no changes
@@ -151,7 +151,7 @@ with:
 **Solution:**
 1. Specify the path explicitly:
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v1
   with:
     solution-path: ./src/MySolution.sln
 ```
@@ -249,12 +249,12 @@ with:
 2. Check the workflow path (note: no `.github` prefix for reusable workflows):
    ```yaml
    # Correct
-   uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+   uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
 
    # Wrong
-   uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v2
+   uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
    ```
-3. Ensure you're using a valid ref (`@v2`, `@main`, etc.)
+3. Ensure you're using a valid ref (`@v1`, `@main`, etc.)
 
 ### "Resource not accessible by integration"
 
@@ -299,7 +299,7 @@ env:
 
 **For specific actions:**
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v1
   with:
     solution-folder: solutions/MySolution/src
     debug: 'true'
@@ -361,4 +361,3 @@ A: Version comparison is enabled by default. Set `skip-if-same-version: false` t
 - [Features Guide](./features.md) - Understanding advanced features
 - [Actions Reference](./actions-reference.md) - Detailed action documentation
 - [Authentication Guide](./authentication.md) - Credential setup
-- [Migration Guide](./migration-v2.md) - Upgrading from v1

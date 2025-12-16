@@ -13,7 +13,7 @@
 #
 # Usage:
 #   - name: Export solution
-#     uses: joshsmithxrm/ppds-alm/.github/actions/export-solution@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/export-solution@v1
 #     with:
 #       solution-name: MySolution
 #       output-folder: solutions/MySolution/src

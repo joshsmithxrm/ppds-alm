@@ -6,7 +6,7 @@
 # Usage:
 #   - name: Pack solution
 #     id: pack
-#     uses: joshsmithxrm/ppds-alm/.github/actions/pack-solution@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/pack-solution@v1
 #     with:
 #       solution-folder: solutions/MySolution/src
 #       solution-name: MySolution

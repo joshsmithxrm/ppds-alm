@@ -15,7 +15,7 @@ Installs .NET SDK and Power Platform CLI.
 **Usage:**
 ```yaml
 - name: Setup PAC CLI
-  uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v1
   with:
     pac-version: '1.35.5'  # Optional: pin specific version
 ```
@@ -46,7 +46,7 @@ Authenticates to a Power Platform environment using service principal.
 **Usage:**
 ```yaml
 - name: Authenticate
-  uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v1
   with:
     environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
     tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
@@ -85,7 +85,7 @@ Exports and unpacks a Power Platform solution from the authenticated environment
 **Usage:**
 ```yaml
 - name: Export solution
-  uses: joshsmithxrm/ppds-alm/.github/actions/export-solution@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/export-solution@v1
   with:
     solution-name: MySolution
     output-folder: solutions/MySolution/src
@@ -125,7 +125,7 @@ Imports a Power Platform solution with enterprise-grade features.
 ```yaml
 - name: Import solution
   id: import
-  uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v1
   with:
     solution-path: ./exports/MySolution_managed.zip
     solution-name: MySolution
@@ -185,7 +185,7 @@ Packs a Power Platform solution from unpacked source files.
 ```yaml
 - name: Pack solution
   id: pack
-  uses: joshsmithxrm/ppds-alm/.github/actions/pack-solution@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/pack-solution@v1
   with:
     solution-folder: solutions/MySolution/src
     solution-name: MySolution
@@ -226,7 +226,7 @@ Builds the .NET solution containing plugins, workflow activities, and custom API
 ```yaml
 - name: Build .NET solution
   id: build
-  uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v1
   with:
     solution-path: MySolution.sln
     configuration: Release
@@ -274,7 +274,7 @@ Copies built plugin assemblies to the solution's PluginAssemblies folder.
 **Usage:**
 ```yaml
 - name: Copy plugin assemblies
-  uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-assemblies@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-assemblies@v1
   with:
     source-assembly: src/Plugins/MyProject.Plugins/bin/Release/net462/MyProject.Plugins.dll
     solution-folder: solutions/MySolution/src
@@ -308,7 +308,7 @@ Copies built plugin packages (.nupkg) to the solution's pluginpackages folder.
 **Usage:**
 ```yaml
 - name: Copy plugin packages
-  uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-packages@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-packages@v1
   with:
     source-package: src/PluginPackages/MyProject.PluginPackage/bin/Release/prefix_MyProject.PluginPackage.1.0.0.nupkg
     solution-folder: solutions/MySolution/src
@@ -346,7 +346,7 @@ Runs the PowerApps Solution Checker to validate solution quality.
 ```yaml
 - name: Check solution quality
   id: check
-  uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v1
   with:
     solution-path: ./exports/MySolution_managed.zip
     fail-on-level: High
@@ -405,7 +405,7 @@ Analyzes git changes to filter out "noise" from Power Platform solution exports.
 
 - name: Analyze changes
   id: analyze
-  uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v1
   with:
     solution-folder: solutions/MySolution/src
     debug: 'false'
@@ -456,16 +456,16 @@ Analyzes git changes to filter out "noise" from Power Platform solution exports.
 steps:
   - uses: actions/checkout@v4
 
-  - uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v2
+  - uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v1
 
-  - uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v2
+  - uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v1
     with:
       environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
       tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
       client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
       client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
 
-  - uses: joshsmithxrm/ppds-alm/.github/actions/export-solution@v2
+  - uses: joshsmithxrm/ppds-alm/.github/actions/export-solution@v1
     with:
       solution-name: MySolution
       output-folder: solutions/MySolution/src
@@ -473,7 +473,7 @@ steps:
   - run: git add -A
 
   - id: analyze
-    uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v2
+    uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v1
     with:
       solution-folder: solutions/MySolution/src
 
@@ -492,33 +492,33 @@ steps:
   - uses: actions/checkout@v4
 
   - id: build
-    uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v2
+    uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v1
     with:
       solution-path: MySolution.sln
       run-tests: 'true'
 
-  - uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-assemblies@v2
+  - uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-assemblies@v1
     with:
       source-assembly: ${{ steps.build.outputs.classic-assembly-path }}
       solution-folder: solutions/MySolution/src
 
-  - uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v2
+  - uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v1
 
   - id: pack
-    uses: joshsmithxrm/ppds-alm/.github/actions/pack-solution@v2
+    uses: joshsmithxrm/ppds-alm/.github/actions/pack-solution@v1
     with:
       solution-folder: solutions/MySolution/src
       solution-name: MySolution
       package-type: Managed
 
-  - uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v2
+  - uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v1
     with:
       environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
       tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
       client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
       client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
 
-  - uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v2
+  - uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v1
     with:
       solution-path: ${{ steps.pack.outputs.solution-path }}
       solution-name: MySolution

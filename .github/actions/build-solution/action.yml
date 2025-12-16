@@ -11,7 +11,7 @@
 #
 # Usage:
 #   - name: Build .NET solution
-#     uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v1
 #     with:
 #       solution-path: MySolution.sln
 #       configuration: Release

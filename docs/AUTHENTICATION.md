@@ -92,7 +92,7 @@ pac admin assign-user \
 
 ### GitHub Actions
 
-#### Using GitHub Environments (Recommended for v2)
+#### Using GitHub Environments (Recommended)
 
 1. Go to repository **Settings** > **Environments**
 2. Create environments: `Dev`, `QA`, `Prod`
@@ -123,13 +123,13 @@ If not using environments:
    - `DATAVERSE_CLIENT_ID`
    - `DATAVERSE_CLIENT_SECRET`
 
-#### Workflow Usage (v2)
+#### Workflow Usage
 
 ```yaml
 jobs:
   deploy:
     environment: QA  # Uses QA environment secrets
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src

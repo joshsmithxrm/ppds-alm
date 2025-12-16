@@ -10,7 +10,7 @@
 # Usage:
 #   jobs:
 #     deploy:
-#       uses: joshsmithxrm/ppds-alm/github/workflows/plugin-deploy.yml@v2
+#       uses: joshsmithxrm/ppds-alm/github/workflows/plugin-deploy.yml@v1
 #       with:
 #         registration-file: ./registrations.json
 #       secrets:

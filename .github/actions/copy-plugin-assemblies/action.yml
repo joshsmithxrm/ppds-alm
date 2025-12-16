@@ -21,7 +21,7 @@
 #
 # Usage:
 #   - name: Copy plugin assemblies
-#     uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-assemblies@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-assemblies@v1
 #     with:
 #       source-assembly: src/Plugins/MyProject.Plugins/bin/Release/net462/MyProject.Plugins.dll
 #       solution-folder: solutions/MySolution/src

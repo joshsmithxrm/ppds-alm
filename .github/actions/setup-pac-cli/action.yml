@@ -5,11 +5,11 @@
 #
 # Usage:
 #   - name: Setup PAC CLI
-#     uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v1
 #
 #   # Pin to specific version (recommended for production stability)
 #   - name: Setup PAC CLI
-#     uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v1
 #     with:
 #       pac-version: '1.35.5'
 #

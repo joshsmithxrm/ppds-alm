@@ -1,6 +1,6 @@
 # Features Guide
 
-Deep dive into PPDS ALM v2's advanced features.
+Deep dive into PPDS ALM's advanced features.
 
 ## Smart Import
 
@@ -29,7 +29,7 @@ Result: Import skipped (version match)
 
 **To Disable:**
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v1
   with:
     solution-path: ./MySolution_managed.zip
     skip-if-same-version: 'false'  # Force import regardless of version
@@ -59,7 +59,7 @@ The import action intelligently retries only **transient** failures.
 
 **Configuration:**
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v1
   with:
     solution-path: ./MySolution_managed.zip
     max-retries: '3'
@@ -77,7 +77,7 @@ The import action supports Power Platform deployment settings files for environm
 
 **Usage:**
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v1
   with:
     solution-path: ./MySolution_managed.zip
     settings-file: ./config/qa.deploymentsettings.json
@@ -135,7 +135,7 @@ The `analyze-changes` action examines each file change and categorizes it as "no
 
 # Analyze for noise
 - id: analyze
-  uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v2
+  uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v1
   with:
     solution-folder: solutions/MySolution/src
     debug: 'false'
@@ -157,7 +157,7 @@ The `analyze-changes` action examines each file change and categorizes it as "no
 Enable debug mode to see detailed analysis:
 
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v1
   with:
     solution-folder: solutions/MySolution/src
     debug: 'true'
@@ -194,13 +194,13 @@ PowerApps Solution Checker validates solution quality by analyzing for:
 **Fail on Different Thresholds:**
 ```yaml
 # Strict: Fail on any High or Critical issue
-- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v1
   with:
     solution-path: ./MySolution_managed.zip
     fail-on-level: High
 
 # Lenient: Only fail on Critical issues
-- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v1
   with:
     solution-path: ./MySolution_managed.zip
     fail-on-level: Critical
@@ -213,7 +213,7 @@ PowerApps Solution Checker validates solution quality by analyzing for:
 
 Choose the geography closest to your environment:
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v1
   with:
     solution-path: ./MySolution_managed.zip
     geography: europe  # or unitedstates, asia, australia, etc.
@@ -223,7 +223,7 @@ Choose the geography closest to your environment:
 
 Customize severity of specific rules:
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v1
   with:
     solution-path: ./MySolution_managed.zip
     rule-level-override: ./config/checker-rules.json
@@ -237,7 +237,7 @@ Results are output in SARIF format, which:
 - Provides detailed issue locations
 
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v1
   id: check
   with:
     solution-path: ./MySolution_managed.zip
@@ -302,7 +302,7 @@ src/
 Run unit tests as part of the build:
 
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v1
   with:
     solution-path: MySolution.sln
     run-tests: 'true'
@@ -333,7 +333,7 @@ Test results are reported in the workflow summary.
 PAC CLI updates can introduce breaking changes. Pin versions for stability:
 
 ```yaml
-- uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v2
+- uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v1
   with:
     pac-version: '1.35.5'  # Known working version
 ```
@@ -350,7 +350,7 @@ Find versions at: https://www.nuget.org/packages/Microsoft.PowerApps.CLI.Tool
 # Simple: use pre-built workflow
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
 ```
 
 ### Use Composite Actions for Custom Scenarios
@@ -360,8 +360,8 @@ jobs:
 jobs:
   custom:
     steps:
-      - uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v2
-      - uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v2
+      - uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v1
+      - uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v1
       # ... custom steps ...
 ```
 
@@ -369,10 +369,10 @@ jobs:
 
 ```yaml
 # Development: use major version
-uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
 
 # Production: pin specific version
-uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2.0.0
+uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1.0.0
 ```
 
 ### Separate Environments with GitHub Environments

@@ -5,7 +5,7 @@
 #
 # Usage:
 #   - name: Authenticate to environment
-#     uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v2
+#     uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v1
 #     with:
 #       environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
 #       tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}

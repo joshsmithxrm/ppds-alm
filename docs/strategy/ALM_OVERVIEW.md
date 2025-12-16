@@ -137,7 +137,7 @@ on:
 
 jobs:
   export:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-export.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-export.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -157,7 +157,7 @@ on:
 
 jobs:
   validate:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-validate.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-validate.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -178,7 +178,7 @@ on:
 
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v2
+    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src

@@ -15,7 +15,7 @@
 # Usage:
 #   jobs:
 #     alm:
-#       uses: joshsmithxrm/ppds-alm/github/workflows/full-alm.yml@v2
+#       uses: joshsmithxrm/ppds-alm/github/workflows/full-alm.yml@v1
 #       with:
 #         solution-name: MySolution
 #         solution-folder: solutions/MySolution/src
