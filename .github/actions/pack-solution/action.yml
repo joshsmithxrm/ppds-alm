@@ -1,0 +1,77 @@
+# =============================================================================
+# Composite Action: Pack Solution
+# =============================================================================
+# Packs a Power Platform solution from unpacked source files.
+#
+# Usage:
+#   - name: Pack solution
+#     id: pack
+#     uses: joshsmithxrm/ppds-alm/.github/actions/pack-solution@v2
+#     with:
+#       solution-folder: solutions/MySolution/src
+#       solution-name: MySolution
+#       package-type: Managed  # or Unmanaged - same source, different output
+#
+#   # Use output
+#   - run: echo "Packed to ${{ steps.pack.outputs.solution-path }}"
+#
+# Prerequisites:
+#   - PAC CLI must be installed (use setup-pac-cli action first)
+#
+# =============================================================================
+
+name: 'Pack Solution'
+description: 'Pack Power Platform solution from unpacked source files'
+
+branding:
+  icon: 'package'
+  color: 'purple'
+
+inputs:
+  solution-folder:
+    description: 'Path to unpacked solution folder'
+    required: true
+  solution-name:
+    description: 'Solution name (used in output filename)'
+    required: true
+  output-folder:
+    description: 'Output folder for packed zip file'
+    required: false
+    default: './exports'
+  package-type:
+    description: 'Package type: Managed, Unmanaged, or Both'
+    required: false
+    default: 'Managed'
+
+outputs:
+  solution-path:
+    description: 'Full path to packed solution zip file'
+    value: ${{ steps.pack.outputs.path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Create output directory
+      shell: bash
+      run: mkdir -p "${{ inputs.output-folder }}"
+
+    - name: Pack solution
+      id: pack
+      shell: bash
+      run: |
+        # Determine filename suffix based on package type
+        PACKAGE_TYPE_LOWER=$(echo "${{ inputs.package-type }}" | tr '[:upper:]' '[:lower:]')
+        SOLUTION_PATH="${{ inputs.output-folder }}/${{ inputs.solution-name }}_${PACKAGE_TYPE_LOWER}.zip"
+
+        echo "Packing solution..."
+        echo "  Source: ${{ inputs.solution-folder }}"
+        echo "  Output: $SOLUTION_PATH"
+        echo "  Type:   ${{ inputs.package-type }}"
+
+        pac solution pack \
+          --zipfile "$SOLUTION_PATH" \
+          --folder "${{ inputs.solution-folder }}" \
+          --packagetype "${{ inputs.package-type }}"
+
+        echo "path=$SOLUTION_PATH" >> $GITHUB_OUTPUT
+        echo "Solution packed successfully: $SOLUTION_PATH"

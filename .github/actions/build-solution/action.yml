@@ -1,0 +1,281 @@
+# =============================================================================
+# Composite Action: Build Solution
+# =============================================================================
+# Builds the .NET solution containing plugins, workflow activities, and
+# custom APIs. Supports both classic plugin assemblies and modern plugin
+# packages (NuGet-based).
+#
+# Prerequisites:
+#   - .NET SDK (installed by this action if not present)
+#   - Solution file (.sln) in repository
+#
+# Usage:
+#   - name: Build .NET solution
+#     uses: joshsmithxrm/ppds-alm/.github/actions/build-solution@v2
+#     with:
+#       solution-path: MySolution.sln
+#       configuration: Release
+#       run-tests: 'true'
+#
+# Outputs:
+#   - classic-assembly-path: Path to classic plugin DLL
+#   - plugin-package-path: Path to plugin package NuGet file
+#   - entities-assembly-path: Path to entities DLL
+#   - build-succeeded: Whether build completed successfully
+#   - test-succeeded: Whether tests passed (if run)
+#
+# =============================================================================
+
+name: 'Build Solution'
+description: 'Build .NET solution with plugins, workflow activities, and custom APIs'
+
+branding:
+  icon: 'tool'
+  color: 'purple'
+
+inputs:
+  solution-path:
+    description: 'Path to .NET solution file (.sln). If empty, auto-detects first .sln in root.'
+    required: false
+    default: ''
+  configuration:
+    description: 'Build configuration (Debug or Release)'
+    required: false
+    default: 'Release'
+  dotnet-version:
+    description: '.NET SDK version to use'
+    required: false
+    default: '8.x'
+  run-tests:
+    description: 'Run unit tests after build'
+    required: false
+    default: 'false'
+  test-filter:
+    description: 'Test filter expression (optional)'
+    required: false
+    default: ''
+  plugins-folder:
+    description: 'Folder containing plugin projects (for output location)'
+    required: false
+    default: 'src/Plugins'
+  plugin-packages-folder:
+    description: 'Folder containing plugin package projects (for output location)'
+    required: false
+    default: 'src/PluginPackages'
+  shared-folder:
+    description: 'Folder containing shared projects like Entities (for output location)'
+    required: false
+    default: 'src/Shared'
+
+outputs:
+  classic-assembly-path:
+    description: 'Path to classic plugin assembly DLL'
+    value: ${{ steps.locate.outputs.classic_assembly }}
+  plugin-package-path:
+    description: 'Path to plugin package NuGet file'
+    value: ${{ steps.locate.outputs.plugin_package }}
+  entities-assembly-path:
+    description: 'Path to entities assembly DLL'
+    value: ${{ steps.locate.outputs.entities_assembly }}
+  build-succeeded:
+    description: 'Whether the build completed successfully'
+    value: ${{ steps.build.outputs.succeeded }}
+  test-succeeded:
+    description: 'Whether tests passed (empty if not run)'
+    value: ${{ steps.test.outputs.succeeded }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: Detect solution file
+      id: detect
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.solution-path }}" ]; then
+          SLN_PATH="${{ inputs.solution-path }}"
+        else
+          SLN_PATH=$(find . -maxdepth 1 -name "*.sln" | head -1 || echo "")
+        fi
+
+        if [ -n "$SLN_PATH" ] && [ -f "$SLN_PATH" ]; then
+          echo "Found .NET solution: $SLN_PATH"
+          echo "solution_path=$SLN_PATH" >> $GITHUB_OUTPUT
+          echo "has_solution=true" >> $GITHUB_OUTPUT
+        else
+          echo "::warning::Solution file not found"
+          echo "has_solution=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Restore NuGet packages
+      if: steps.detect.outputs.has_solution == 'true'
+      shell: bash
+      run: |
+        echo "Restoring NuGet packages..."
+        dotnet restore "${{ steps.detect.outputs.solution_path }}"
+
+    - name: Build solution
+      id: build
+      if: steps.detect.outputs.has_solution == 'true'
+      shell: bash
+      run: |
+        echo "Building solution in ${{ inputs.configuration }} configuration..."
+
+        set +e
+        dotnet build "${{ steps.detect.outputs.solution_path }}" \
+          --configuration ${{ inputs.configuration }} \
+          --no-restore \
+          --verbosity minimal \
+          2>&1 | tee build_output.txt
+        BUILD_EXIT=$?
+        set -e
+
+        if [ $BUILD_EXIT -eq 0 ]; then
+          echo "Build succeeded"
+          echo "succeeded=true" >> $GITHUB_OUTPUT
+        else
+          echo "::error::Build failed"
+          echo "succeeded=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+    - name: Locate build outputs
+      id: locate
+      if: steps.build.outputs.succeeded == 'true'
+      shell: bash
+      env:
+        CONFIG: ${{ inputs.configuration }}
+        PLUGINS_FOLDER: ${{ inputs.plugins-folder }}
+        PLUGIN_PACKAGES_FOLDER: ${{ inputs.plugin-packages-folder }}
+        SHARED_FOLDER: ${{ inputs.shared-folder }}
+      run: |
+        echo "Locating build outputs..."
+
+        # Classic plugin assembly
+        CLASSIC_DLL=$(find "$PLUGINS_FOLDER" -name "*.dll" -path "*bin/${CONFIG}*" -not -name "Microsoft.*" -not -name "System.*" 2>/dev/null | head -1 || echo "")
+        if [ -n "$CLASSIC_DLL" ]; then
+          echo "Classic plugin assembly: $CLASSIC_DLL"
+          echo "classic_assembly=$CLASSIC_DLL" >> $GITHUB_OUTPUT
+        else
+          echo "No classic plugin assembly found"
+          echo "classic_assembly=" >> $GITHUB_OUTPUT
+        fi
+
+        # Plugin package (NuGet)
+        PLUGIN_NUPKG=$(find "$PLUGIN_PACKAGES_FOLDER" -name "*.nupkg" -path "*bin/${CONFIG}*" 2>/dev/null | head -1 || echo "")
+        if [ -n "$PLUGIN_NUPKG" ]; then
+          echo "Plugin package: $PLUGIN_NUPKG"
+          echo "plugin_package=$PLUGIN_NUPKG" >> $GITHUB_OUTPUT
+        else
+          echo "No plugin package found"
+          echo "plugin_package=" >> $GITHUB_OUTPUT
+        fi
+
+        # Entities assembly
+        ENTITIES_DLL=$(find "$SHARED_FOLDER" -name "*.Entities.dll" -path "*bin/${CONFIG}*" 2>/dev/null | head -1 || echo "")
+        if [ -n "$ENTITIES_DLL" ]; then
+          echo "Entities assembly: $ENTITIES_DLL"
+          echo "entities_assembly=$ENTITIES_DLL" >> $GITHUB_OUTPUT
+        else
+          echo "No entities assembly found"
+          echo "entities_assembly=" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run tests
+      id: test
+      if: inputs.run-tests == 'true' && steps.build.outputs.succeeded == 'true'
+      shell: bash
+      run: |
+        echo "Running tests..."
+
+        # Check if test projects exist
+        TEST_PROJECTS=$(find . -name "*.Tests.csproj" -o -name "*Tests.csproj" 2>/dev/null | head -5)
+
+        if [ -z "$TEST_PROJECTS" ]; then
+          echo "No test projects found"
+          echo "succeeded=skipped" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        echo "Found test projects:"
+        echo "$TEST_PROJECTS"
+
+        # Build test arguments array to properly handle spaces in filter
+        TEST_ARGS=(
+          "${{ steps.detect.outputs.solution_path }}"
+          --configuration "${{ inputs.configuration }}"
+          --no-build
+          --verbosity normal
+          --logger "trx;LogFileName=test-results.trx"
+        )
+        if [ -n "${{ inputs.test-filter }}" ]; then
+          TEST_ARGS+=(--filter "${{ inputs.test-filter }}")
+        fi
+
+        set +e
+        dotnet test "${TEST_ARGS[@]}" 2>&1 | tee test_output.txt
+        TEST_EXIT=${PIPESTATUS[0]}
+        set -e
+
+        if [ $TEST_EXIT -eq 0 ]; then
+          echo "Tests passed"
+          echo "succeeded=true" >> $GITHUB_OUTPUT
+        else
+          echo "::error::Tests failed"
+          echo "succeeded=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+    - name: Generate step summary
+      if: steps.detect.outputs.has_solution == 'true'
+      shell: bash
+      env:
+        BUILD_SUCCEEDED: ${{ steps.build.outputs.succeeded }}
+        TEST_SUCCEEDED: ${{ steps.test.outputs.succeeded }}
+        CLASSIC_DLL: ${{ steps.locate.outputs.classic_assembly }}
+        PLUGIN_PKG: ${{ steps.locate.outputs.plugin_package }}
+        ENTITIES_DLL: ${{ steps.locate.outputs.entities_assembly }}
+      run: |
+        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        echo "| Component | Status | Output |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+
+        # Build status
+        if [ "$BUILD_SUCCEEDED" = "true" ]; then
+          echo "| Build | **Passed** | ${{ inputs.configuration }} |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "| Build | **Failed** | - |" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        # Test status
+        if [ "${{ inputs.run-tests }}" = "true" ]; then
+          if [ "$TEST_SUCCEEDED" = "true" ]; then
+            echo "| Tests | **Passed** | All tests passed |" >> $GITHUB_STEP_SUMMARY
+          elif [ "$TEST_SUCCEEDED" = "skipped" ]; then
+            echo "| Tests | **Skipped** | No test projects found |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Tests | **Failed** | See logs |" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Build Outputs" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -n "$CLASSIC_DLL" ]; then
+          echo "- **Classic Assembly:** \`$CLASSIC_DLL\`" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ -n "$PLUGIN_PKG" ]; then
+          echo "- **Plugin Package:** \`$PLUGIN_PKG\`" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ -n "$ENTITIES_DLL" ]; then
+          echo "- **Entities Assembly:** \`$ENTITIES_DLL\`" >> $GITHUB_STEP_SUMMARY
+        fi

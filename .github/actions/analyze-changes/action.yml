@@ -1,0 +1,280 @@
+# =============================================================================
+# Composite Action: Analyze Changes
+# =============================================================================
+# Analyzes git changes to filter out "noise" from Power Platform solution exports.
+# Distinguishes between real customization changes and volatile content that
+# changes on every export (version stamps, session IDs, etc.).
+#
+# Prerequisites:
+#   - Changes must be staged (git add -A) before calling this action
+#   - Must be run from a git repository
+#
+# Usage:
+#   - name: Analyze changes for noise
+#     uses: joshsmithxrm/ppds-alm/.github/actions/analyze-changes@v2
+#     with:
+#       solution-folder: solutions/MySolution/src
+#       debug: 'false'
+#
+# Noise Patterns Filtered:
+#   - Solution.xml <Version> tag changes only
+#   - Canvas App DocumentUri random suffixes
+#   - Canvas App BackgroundImageUri random suffixes
+#   - Workflow workflowName changes (when workflowEntityId unchanged)
+#   - Whitespace-only file changes
+#   - Git R100 renames (100% identical content, filename changed)
+#   - MissingDependency version reference changes
+#
+# =============================================================================
+
+name: 'Analyze Changes'
+description: 'Filter noise from Power Platform solution exports to detect real changes'
+
+branding:
+  icon: 'filter'
+  color: 'purple'
+
+inputs:
+  solution-folder:
+    description: 'Path to the unpacked solution folder'
+    required: true
+  debug:
+    description: 'Enable verbose debug logging'
+    required: false
+    default: 'false'
+
+outputs:
+  has-real-changes:
+    description: 'Whether real (non-noise) changes were detected'
+    value: ${{ steps.analyze.outputs.has_real_changes }}
+  change-summary:
+    description: 'Human-readable summary of changes'
+    value: ${{ steps.analyze.outputs.change_summary }}
+  noise-count:
+    description: 'Number of noise changes filtered out'
+    value: ${{ steps.analyze.outputs.noise_count }}
+  real-count:
+    description: 'Number of real changes detected'
+    value: ${{ steps.analyze.outputs.real_count }}
+  real-files:
+    description: 'List of files with real changes (newline-separated)'
+    value: ${{ steps.analyze.outputs.real_files }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Analyze changes
+      id: analyze
+      shell: bash
+      env:
+        SOLUTION_FOLDER: ${{ inputs.solution-folder }}
+        DEBUG: ${{ inputs.debug }}
+      run: |
+        set -euo pipefail
+
+        # Initialize counters
+        NOISE_COUNT=0
+        REAL_COUNT=0
+        REAL_FILES=""
+        NOISE_FILES=""
+
+        debug_log() {
+          if [ "$DEBUG" = "true" ]; then
+            echo "[DEBUG] $1"
+          fi
+        }
+
+        echo "Analyzing staged changes for noise patterns..."
+
+        # Get list of staged changes with status
+        # Format: status<TAB>filename or R100<TAB>old<TAB>new for renames
+        CHANGES=$(git diff --cached --name-status)
+
+        if [ -z "$CHANGES" ]; then
+          echo "No staged changes to analyze"
+          echo "has_real_changes=false" >> $GITHUB_OUTPUT
+          echo "change_summary=No changes detected" >> $GITHUB_OUTPUT
+          echo "noise_count=0" >> $GITHUB_OUTPUT
+          echo "real_count=0" >> $GITHUB_OUTPUT
+          echo "real_files=" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        debug_log "Raw changes:"
+        debug_log "$CHANGES"
+
+        # Process each changed file
+        while IFS=$'\t' read -r STATUS FILE1 FILE2; do
+          # Handle renames (R100 = 100% similarity rename, pure noise)
+          if [[ "$STATUS" =~ ^R[0-9]+ ]]; then
+            SIMILARITY="${STATUS:1}"
+            debug_log "Rename detected: $FILE1 -> $FILE2 (similarity: $SIMILARITY%)"
+
+            if [ "$SIMILARITY" = "100" ]; then
+              debug_log "  -> Filtering as noise (100% identical content rename)"
+              NOISE_COUNT=$((NOISE_COUNT + 1))
+              NOISE_FILES="$NOISE_FILES\n- R100 rename: $FILE1 -> $FILE2"
+              continue
+            fi
+          fi
+
+          # For non-renames, FILE2 is empty, so use FILE1
+          FILE="${FILE2:-$FILE1}"
+
+          debug_log "Checking file: $FILE (status: $STATUS)"
+
+          IS_NOISE=false
+          NOISE_REASON=""
+
+          # Pattern 1: Solution.xml version-only changes
+          if [[ "$FILE" == *"Solution.xml" ]]; then
+            # Get the actual diff content for this file
+            DIFF_CONTENT=$(git diff --cached -- "$FILE" 2>/dev/null || echo "")
+
+            # Check if the only change is the Version tag
+            # Remove diff headers and check remaining content
+            MEANINGFUL_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" | grep -v "<Version>" | grep -v "</Version>" || true)
+
+            if [ -z "$MEANINGFUL_CHANGES" ]; then
+              IS_NOISE=true
+              NOISE_REASON="Solution.xml version-only change"
+            fi
+          fi
+
+          # Pattern 2: Canvas App DocumentUri/BackgroundImageUri volatile URIs
+          if [[ "$FILE" == *".msapp"* ]] || [[ "$FILE" == *"CanvasManifest.json"* ]] || [[ "$FILE" == *"/Src/"*".fx.yaml" ]]; then
+            DIFF_CONTENT=$(git diff --cached -- "$FILE" 2>/dev/null || echo "")
+
+            # Check if changes are only in DocumentUri or BackgroundImageUri lines
+            NON_URI_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" | grep -Ev "(DocumentUri|BackgroundImageUri)" || true)
+
+            if [ -z "$NON_URI_CHANGES" ]; then
+              IS_NOISE=true
+              NOISE_REASON="Canvas App volatile URI change"
+            fi
+          fi
+
+          # Pattern 3: Workflow session ID changes (workflowName changes, workflowEntityId same)
+          if [[ "$FILE" == *"Workflows/"* ]] && [[ "$FILE" == *.json ]]; then
+            DIFF_CONTENT=$(git diff --cached -- "$FILE" 2>/dev/null || echo "")
+
+            # Check if only workflowName changed (session regeneration noise)
+            # Real changes would affect workflowEntityId or other structural elements
+            STRUCTURAL_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" | grep -Ev "\"workflowName\"" || true)
+
+            if [ -z "$STRUCTURAL_CHANGES" ]; then
+              IS_NOISE=true
+              NOISE_REASON="Workflow session ID regeneration"
+            fi
+          fi
+
+          # Pattern 4: Whitespace-only changes
+          if [ "$IS_NOISE" = false ]; then
+            DIFF_CONTENT=$(git diff --cached --ignore-all-space --ignore-blank-lines -- "$FILE" 2>/dev/null || echo "")
+
+            # If ignoring whitespace shows no changes, it's whitespace-only
+            if [ -z "$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" || true)" ]; then
+              # Double-check there ARE changes when not ignoring whitespace
+              ACTUAL_DIFF=$(git diff --cached -- "$FILE" 2>/dev/null || echo "")
+              if [ -n "$(echo "$ACTUAL_DIFF" | grep -E "^[+-]" | grep -v "^[+-]{3}" || true)" ]; then
+                IS_NOISE=true
+                NOISE_REASON="Whitespace-only change"
+              fi
+            fi
+          fi
+
+          # Pattern 5: MissingDependency version reference changes
+          if [[ "$FILE" == *"Solution.xml" ]] || [[ "$FILE" == *"Customizations.xml" ]]; then
+            DIFF_CONTENT=$(git diff --cached -- "$FILE" 2>/dev/null || echo "")
+
+            # Check if only MissingDependency or schemaVersion changed
+            OTHER_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" | grep -Ev "(MissingDependency|schemaVersion|<Version>)" || true)
+
+            if [ -z "$OTHER_CHANGES" ] && [ "$IS_NOISE" = false ]; then
+              IS_NOISE=true
+              NOISE_REASON="Dependency version reference update"
+            fi
+          fi
+
+          # Categorize the change
+          if [ "$IS_NOISE" = true ]; then
+            NOISE_COUNT=$((NOISE_COUNT + 1))
+            NOISE_FILES="$NOISE_FILES\n- $FILE ($NOISE_REASON)"
+            debug_log "  -> Filtered as noise: $NOISE_REASON"
+          else
+            REAL_COUNT=$((REAL_COUNT + 1))
+            REAL_FILES="$REAL_FILES$FILE\n"
+            debug_log "  -> Real change"
+          fi
+
+        done <<< "$CHANGES"
+
+        # Determine result
+        if [ "$REAL_COUNT" -eq 0 ]; then
+          HAS_REAL_CHANGES="false"
+          SUMMARY="All $NOISE_COUNT changes were noise (filtered)"
+        else
+          HAS_REAL_CHANGES="true"
+          SUMMARY="$REAL_COUNT real changes detected ($NOISE_COUNT noise filtered)"
+        fi
+
+        echo ""
+        echo "=== Analysis Complete ==="
+        echo "$SUMMARY"
+        echo ""
+
+        if [ "$DEBUG" = "true" ] && [ -n "$NOISE_FILES" ]; then
+          echo "Noise files filtered:"
+          echo -e "$NOISE_FILES"
+          echo ""
+        fi
+
+        if [ "$REAL_COUNT" -gt 0 ]; then
+          echo "Files with real changes:"
+          echo -e "$REAL_FILES" | head -20
+          if [ "$REAL_COUNT" -gt 20 ]; then
+            echo "... and $((REAL_COUNT - 20)) more"
+          fi
+        fi
+
+        # Set outputs
+        echo "has_real_changes=$HAS_REAL_CHANGES" >> $GITHUB_OUTPUT
+        echo "change_summary=$SUMMARY" >> $GITHUB_OUTPUT
+        echo "noise_count=$NOISE_COUNT" >> $GITHUB_OUTPUT
+        echo "real_count=$REAL_COUNT" >> $GITHUB_OUTPUT
+
+        # For multi-line output, use delimiter
+        {
+          echo "real_files<<EOF"
+          echo -e "$REAL_FILES"
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
+
+    - name: Generate step summary
+      shell: bash
+      env:
+        HAS_REAL_CHANGES: ${{ steps.analyze.outputs.has_real_changes }}
+        CHANGE_SUMMARY: ${{ steps.analyze.outputs.change_summary }}
+        NOISE_COUNT: ${{ steps.analyze.outputs.noise_count }}
+        REAL_COUNT: ${{ steps.analyze.outputs.real_count }}
+        REAL_FILES: ${{ steps.analyze.outputs.real_files }}
+      run: |
+        echo "## Change Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Real Changes | $REAL_COUNT |" >> $GITHUB_STEP_SUMMARY
+        echo "| Noise Filtered | $NOISE_COUNT |" >> $GITHUB_STEP_SUMMARY
+        echo "| Has Real Changes | $HAS_REAL_CHANGES |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "$REAL_COUNT" -gt 0 ]; then
+          echo "### Files with Real Changes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo -e "$REAL_FILES" | head -20 >> $GITHUB_STEP_SUMMARY
+          if [ "$REAL_COUNT" -gt 20 ]; then
+            echo "... and $((REAL_COUNT - 20)) more files" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        fi

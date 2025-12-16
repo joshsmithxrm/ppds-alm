@@ -1,0 +1,166 @@
+# =============================================================================
+# Composite Action: Copy Plugin Packages
+# =============================================================================
+# Copies built plugin packages (.nupkg) to the solution's pluginpackages folder
+# so they can be packed into the solution.
+#
+# Naming Convention:
+#   Build output:    prefix_MyProject.PluginPackage.1.0.0.nupkg (with version)
+#   Solution expects: prefix_MyProject.PluginPackage.nupkg (no version)
+#   Target folder:   pluginpackages/prefix_MyProject.PluginPackage/package/
+#
+# This action:
+#   1. Finds the target folder by matching the package ID
+#   2. Creates the package/ subfolder if it doesn't exist
+#   3. Copies the .nupkg with version stripped from filename
+#   4. FAILS if copy doesn't succeed (no silent warnings)
+#
+# Prerequisites:
+#   - Must build the solution first using build-solution action
+#   - Solution must have pluginpackages folder structure (from export)
+#
+# Usage:
+#   - name: Copy plugin packages
+#     uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-packages@v2
+#     with:
+#       source-package: src/PluginPackages/MyProject.PluginPackage/bin/Release/prefix_MyProject.PluginPackage.1.0.0.nupkg
+#       solution-folder: solutions/MySolution/src
+#
+# =============================================================================
+
+name: 'Copy Plugin Packages'
+description: 'Copy built plugin packages (.nupkg) to solution folder for packing'
+
+branding:
+  icon: 'box'
+  color: 'purple'
+
+inputs:
+  source-package:
+    description: 'Path to built plugin package (.nupkg file)'
+    required: true
+  solution-folder:
+    description: 'Base path to unpacked solution (e.g., solutions/MySolution/src)'
+    required: true
+
+outputs:
+  copied-count:
+    description: 'Number of locations where package was copied'
+    value: ${{ steps.copy.outputs.copied_count }}
+  target-path:
+    description: 'Path where package was copied'
+    value: ${{ steps.copy.outputs.target_path }}
+  package-id:
+    description: 'Extracted package ID (without version)'
+    value: ${{ steps.copy.outputs.package_id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        if [ ! -f "${{ inputs.source-package }}" ]; then
+          echo "::error::Source package not found: ${{ inputs.source-package }}"
+          exit 1
+        fi
+
+        if [ ! -d "${{ inputs.solution-folder }}" ]; then
+          echo "::error::Solution folder not found: ${{ inputs.solution-folder }}"
+          exit 1
+        fi
+
+        # Validate it's a .nupkg file
+        if [[ "${{ inputs.source-package }}" != *.nupkg ]]; then
+          echo "::error::Source file must be a .nupkg file: ${{ inputs.source-package }}"
+          exit 1
+        fi
+
+        echo "Source package: ${{ inputs.source-package }}"
+        echo "Solution folder: ${{ inputs.solution-folder }}"
+
+    - name: Copy package to solution
+      id: copy
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        SOURCE="${{ inputs.source-package }}"
+        SOLUTION_FOLDER="${{ inputs.solution-folder }}"
+
+        # Get source package filename
+        SOURCE_FILE=$(basename "$SOURCE")
+        echo "Source filename: $SOURCE_FILE"
+
+        # Extract package ID by removing version and .nupkg extension
+        # Pattern: PackageName.X.Y.Z.nupkg -> PackageName
+        # Example: prefix_MyProject.PluginPackage.1.0.0.nupkg -> prefix_MyProject.PluginPackage
+        PACKAGE_ID=$(echo "$SOURCE_FILE" | sed -E 's/\.[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?\.nupkg$//')
+
+        if [ -z "$PACKAGE_ID" ]; then
+          echo "::error::Could not extract package ID from filename: $SOURCE_FILE"
+          exit 1
+        fi
+
+        echo "Package ID: $PACKAGE_ID"
+
+        # Target filename is package ID + .nupkg (no version)
+        TARGET_NAME="${PACKAGE_ID}.nupkg"
+        echo "Target filename: $TARGET_NAME"
+
+        # Find target folder in pluginpackages
+        PLUGIN_PACKAGES_DIR="$SOLUTION_FOLDER/pluginpackages"
+
+        if [ ! -d "$PLUGIN_PACKAGES_DIR" ]; then
+          echo "::error::pluginpackages folder not found: $PLUGIN_PACKAGES_DIR"
+          exit 1
+        fi
+
+        # Find matching folder (folder name should match package ID)
+        TARGET_FOLDER="$PLUGIN_PACKAGES_DIR/$PACKAGE_ID"
+
+        if [ ! -d "$TARGET_FOLDER" ]; then
+          echo "::error::Package folder not found: $TARGET_FOLDER"
+          echo "Available folders:"
+          ls -la "$PLUGIN_PACKAGES_DIR"
+          exit 1
+        fi
+
+        echo "Found target folder: $TARGET_FOLDER"
+
+        # Create package/ subfolder if it doesn't exist
+        PACKAGE_SUBFOLDER="$TARGET_FOLDER/package"
+        if [ ! -d "$PACKAGE_SUBFOLDER" ]; then
+          echo "Creating package subfolder: $PACKAGE_SUBFOLDER"
+          mkdir -p "$PACKAGE_SUBFOLDER"
+        fi
+
+        # Copy the package
+        TARGET_PATH="$PACKAGE_SUBFOLDER/$TARGET_NAME"
+        echo "Copying $SOURCE -> $TARGET_PATH"
+        cp "$SOURCE" "$TARGET_PATH"
+
+        # Verify copy succeeded
+        if [ ! -f "$TARGET_PATH" ]; then
+          echo "::error::Copy failed - target file not created: $TARGET_PATH"
+          exit 1
+        fi
+
+        echo "Successfully copied package"
+        ls -la "$TARGET_PATH"
+
+        echo "copied_count=1" >> $GITHUB_OUTPUT
+        echo "target_path=$TARGET_PATH" >> $GITHUB_OUTPUT
+        echo "package_id=$PACKAGE_ID" >> $GITHUB_OUTPUT
+
+    - name: Generate step summary
+      shell: bash
+      run: |
+        echo "## Plugin Package Copy" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Source | \`$(basename "${{ inputs.source-package }}")\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Package ID | \`${{ steps.copy.outputs.package_id }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Target | \`${{ steps.copy.outputs.target_path }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Status | Copied |" >> $GITHUB_STEP_SUMMARY

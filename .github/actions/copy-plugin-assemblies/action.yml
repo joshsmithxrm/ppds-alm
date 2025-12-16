@@ -1,0 +1,155 @@
+# =============================================================================
+# Composite Action: Copy Plugin Assemblies
+# =============================================================================
+# Copies built plugin assemblies to the solution's PluginAssemblies folder
+# so they can be packed into the solution.
+#
+# Naming Convention:
+#   Build output:    MyProject.Plugins.dll
+#   Solution expects: MyProjectPlugins.dll (dots removed from name)
+#   Target folder:   PluginAssemblies/MyProjectPlugins-{GUID}/
+#
+# This action:
+#   1. Finds the target folder by matching the assembly name pattern
+#   2. Transforms the filename (removes dots)
+#   3. Copies the DLL to the target location
+#   4. FAILS if copy doesn't succeed (no silent warnings)
+#
+# Prerequisites:
+#   - Must build the solution first using build-solution action
+#   - Solution must have PluginAssemblies folder structure (from export)
+#
+# Usage:
+#   - name: Copy plugin assemblies
+#     uses: joshsmithxrm/ppds-alm/.github/actions/copy-plugin-assemblies@v2
+#     with:
+#       source-assembly: src/Plugins/MyProject.Plugins/bin/Release/net462/MyProject.Plugins.dll
+#       solution-folder: solutions/MySolution/src
+#
+# =============================================================================
+
+name: 'Copy Plugin Assemblies'
+description: 'Copy built plugin assemblies to solution folder for packing'
+
+branding:
+  icon: 'copy'
+  color: 'purple'
+
+inputs:
+  source-assembly:
+    description: 'Path to built plugin assembly DLL'
+    required: true
+  solution-folder:
+    description: 'Base path to unpacked solution (e.g., solutions/MySolution/src)'
+    required: true
+
+outputs:
+  copied-count:
+    description: 'Number of locations where assembly was copied'
+    value: ${{ steps.copy.outputs.copied_count }}
+  target-path:
+    description: 'Path where assembly was copied'
+    value: ${{ steps.copy.outputs.target_path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        if [ ! -f "${{ inputs.source-assembly }}" ]; then
+          echo "::error::Source assembly not found: ${{ inputs.source-assembly }}"
+          exit 1
+        fi
+
+        if [ ! -d "${{ inputs.solution-folder }}" ]; then
+          echo "::error::Solution folder not found: ${{ inputs.solution-folder }}"
+          exit 1
+        fi
+
+        echo "Source assembly: ${{ inputs.source-assembly }}"
+        echo "Solution folder: ${{ inputs.solution-folder }}"
+
+    - name: Copy assembly to solution
+      id: copy
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        SOURCE="${{ inputs.source-assembly }}"
+        SOLUTION_FOLDER="${{ inputs.solution-folder }}"
+
+        # Get source assembly filename and derive target name
+        SOURCE_FILE=$(basename "$SOURCE")
+        echo "Source filename: $SOURCE_FILE"
+
+        # Remove .dll extension to get assembly name
+        ASSEMBLY_NAME="${SOURCE_FILE%.dll}"
+        echo "Assembly name: $ASSEMBLY_NAME"
+
+        # PAC CLI removes dots from assembly name
+        # MyProject.Plugins.dll -> MyProjectPlugins.dll
+        TARGET_NAME=$(echo "$ASSEMBLY_NAME" | tr -d '.').dll
+        echo "Target filename: $TARGET_NAME"
+
+        # Pattern to find the target folder
+        # MyProject.Plugins -> MyProjectPlugins (folder will have -GUID suffix)
+        FOLDER_PATTERN=$(echo "$ASSEMBLY_NAME" | tr -d '.')
+        echo "Looking for folder pattern: ${FOLDER_PATTERN}-*"
+
+        # Find target folder in PluginAssemblies
+        PLUGIN_ASSEMBLIES_DIR="$SOLUTION_FOLDER/PluginAssemblies"
+
+        if [ ! -d "$PLUGIN_ASSEMBLIES_DIR" ]; then
+          echo "::error::PluginAssemblies folder not found: $PLUGIN_ASSEMBLIES_DIR"
+          exit 1
+        fi
+
+        # Find matching folder(s) (e.g., MyProjectPlugins-8F9EA877-77D9-F011-8543-000D3A3B9CBA)
+        mapfile -t TARGET_FOLDERS < <(find "$PLUGIN_ASSEMBLIES_DIR" -maxdepth 1 -type d -name "${FOLDER_PATTERN}-*")
+
+        if [ "${#TARGET_FOLDERS[@]}" -eq 0 ]; then
+          echo "::error::No folder matching pattern '${FOLDER_PATTERN}-*' found in $PLUGIN_ASSEMBLIES_DIR"
+          echo "Available folders:"
+          ls -la "$PLUGIN_ASSEMBLIES_DIR"
+          exit 1
+        fi
+
+        if [ "${#TARGET_FOLDERS[@]}" -gt 1 ]; then
+          echo "::error::Found multiple folders matching pattern '${FOLDER_PATTERN}-*'. Expected exactly one."
+          echo "Matching folders found:"
+          printf '%s\n' "${TARGET_FOLDERS[@]}"
+          exit 1
+        fi
+
+        TARGET_FOLDER="${TARGET_FOLDERS[0]}"
+
+        echo "Found target folder: $TARGET_FOLDER"
+
+        # Copy the assembly
+        TARGET_PATH="$TARGET_FOLDER/$TARGET_NAME"
+        echo "Copying $SOURCE -> $TARGET_PATH"
+        cp "$SOURCE" "$TARGET_PATH"
+
+        # Verify copy succeeded
+        if [ ! -f "$TARGET_PATH" ]; then
+          echo "::error::Copy failed - target file not created: $TARGET_PATH"
+          exit 1
+        fi
+
+        echo "Successfully copied assembly"
+        ls -la "$TARGET_PATH"
+
+        echo "copied_count=1" >> $GITHUB_OUTPUT
+        echo "target_path=$TARGET_PATH" >> $GITHUB_OUTPUT
+
+    - name: Generate step summary
+      shell: bash
+      run: |
+        echo "## Plugin Assembly Copy" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Source | \`$(basename "${{ inputs.source-assembly }}")\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Target | \`${{ steps.copy.outputs.target_path }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Status | Copied |" >> $GITHUB_STEP_SUMMARY

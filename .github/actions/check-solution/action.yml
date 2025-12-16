@@ -1,0 +1,306 @@
+# =============================================================================
+# Composite Action: Check Solution
+# =============================================================================
+# Runs the PowerApps Solution Checker to validate solution quality and
+# identify potential issues before deployment.
+#
+# Prerequisites:
+#   - Must authenticate first using pac-auth action (optional, uses anonymous if not)
+#   - Solution must be packed as a zip file
+#
+# Usage:
+#   - name: Check solution quality
+#     uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v2
+#     with:
+#       solution-path: ./exports/MySolution_managed.zip
+#       fail-on-level: High
+#       geography: unitedstates
+#
+# Severity Levels (in order of severity):
+#   - Critical: Blocking issues that will cause failures
+#   - High: Serious issues that should be addressed
+#   - Medium: Moderate issues worth reviewing
+#   - Low: Minor issues and best practice suggestions
+#   - Informational: Non-issues, just FYI
+#
+# =============================================================================
+
+name: 'Check Solution'
+description: 'Run PowerApps Solution Checker to validate solution quality'
+
+branding:
+  icon: 'check-circle'
+  color: 'purple'
+
+inputs:
+  solution-path:
+    description: 'Path to solution zip file'
+    required: true
+  fail-on-level:
+    description: 'Fail if issues at this level or higher (Critical, High, Medium, Low, Informational)'
+    required: false
+    default: 'High'
+  geography:
+    description: 'Geography for Solution Checker service (unitedstates, europe, asia, australia, japan, india, canada, southamerica, uk, france, uae, germany, switzerland, norway, korea, southafrica)'
+    required: false
+    default: 'unitedstates'
+  output-directory:
+    description: 'Directory for checker output files'
+    required: false
+    default: './checker-results'
+  rule-level-override:
+    description: 'Path to rule level override file (optional)'
+    required: false
+    default: ''
+
+outputs:
+  passed:
+    description: 'Whether the solution passed the threshold check'
+    value: ${{ steps.evaluate.outputs.passed }}
+  critical-count:
+    description: 'Number of critical issues found'
+    value: ${{ steps.evaluate.outputs.critical_count }}
+  high-count:
+    description: 'Number of high severity issues found'
+    value: ${{ steps.evaluate.outputs.high_count }}
+  medium-count:
+    description: 'Number of medium severity issues found'
+    value: ${{ steps.evaluate.outputs.medium_count }}
+  low-count:
+    description: 'Number of low severity issues found'
+    value: ${{ steps.evaluate.outputs.low_count }}
+  informational-count:
+    description: 'Number of informational issues found'
+    value: ${{ steps.evaluate.outputs.informational_count }}
+  total-count:
+    description: 'Total number of issues found'
+    value: ${{ steps.evaluate.outputs.total_count }}
+  results-file:
+    description: 'Path to the SARIF results file'
+    value: ${{ steps.check.outputs.results_file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Create output directory
+      shell: bash
+      run: mkdir -p "${{ inputs.output-directory }}"
+
+    - name: Run Solution Checker
+      id: check
+      shell: bash
+      env:
+        SOLUTION_PATH: ${{ inputs.solution-path }}
+        OUTPUT_DIR: ${{ inputs.output-directory }}
+        GEOGRAPHY: ${{ inputs.geography }}
+        RULE_OVERRIDE: ${{ inputs.rule-level-override }}
+      run: |
+        set -euo pipefail
+
+        echo "Running Solution Checker on: $SOLUTION_PATH"
+        echo "Geography: $GEOGRAPHY"
+
+        # Build the command
+        CHECK_CMD="pac solution check --path \"$SOLUTION_PATH\" --outputDirectory \"$OUTPUT_DIR\" --geo $GEOGRAPHY"
+
+        # Add rule level override if specified
+        if [ -n "$RULE_OVERRIDE" ] && [ -f "$RULE_OVERRIDE" ]; then
+          CHECK_CMD="$CHECK_CMD --ruleLevelOverride \"$RULE_OVERRIDE\""
+          echo "Using rule level override: $RULE_OVERRIDE"
+        fi
+
+        echo "Running: $CHECK_CMD"
+
+        # Run the checker (it may return non-zero if issues found, so we capture the exit code)
+        set +e
+        eval "$CHECK_CMD" 2>&1
+        EXIT_CODE=$?
+        set -e
+
+        echo "Solution Checker exit code: $EXIT_CODE"
+
+        # Find the SARIF results file
+        SARIF_FILE=$(find "$OUTPUT_DIR" -name "*.sarif" -type f | head -1 || echo "")
+
+        if [ -n "$SARIF_FILE" ]; then
+          echo "Results file: $SARIF_FILE"
+          echo "results_file=$SARIF_FILE" >> $GITHUB_OUTPUT
+        else
+          echo "::warning::No SARIF results file found"
+          echo "results_file=" >> $GITHUB_OUTPUT
+        fi
+
+        # Store exit code for later evaluation
+        echo "checker_exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+
+    - name: Evaluate results
+      id: evaluate
+      shell: bash
+      env:
+        RESULTS_FILE: ${{ steps.check.outputs.results_file }}
+        FAIL_LEVEL: ${{ inputs.fail-on-level }}
+        CHECKER_EXIT: ${{ steps.check.outputs.checker_exit_code }}
+      run: |
+        set -euo pipefail
+
+        # Initialize counters
+        CRITICAL_COUNT=0
+        HIGH_COUNT=0
+        MEDIUM_COUNT=0
+        LOW_COUNT=0
+        INFO_COUNT=0
+
+        # Parse SARIF file if it exists
+        if [ -n "$RESULTS_FILE" ] && [ -f "$RESULTS_FILE" ]; then
+          echo "Parsing results from: $RESULTS_FILE"
+
+          # Use jq to count issues by severity level
+          # SARIF uses level: error, warning, note, none
+          # We also check for custom severity properties
+
+          # Count by level (standard SARIF)
+          CRITICAL_COUNT=$(jq '[.runs[].results[] | select(.level == "error" and (.properties.severity // "critical" | ascii_downcase) == "critical")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          HIGH_COUNT=$(jq '[.runs[].results[] | select((.level == "error" and (.properties.severity // "" | ascii_downcase) != "critical") or (.properties.severity // "" | ascii_downcase) == "high")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          MEDIUM_COUNT=$(jq '[.runs[].results[] | select(.level == "warning" or (.properties.severity // "" | ascii_downcase) == "medium")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          LOW_COUNT=$(jq '[.runs[].results[] | select(.level == "note" or (.properties.severity // "" | ascii_downcase) == "low")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          INFO_COUNT=$(jq '[.runs[].results[] | select(.level == "none" or (.properties.severity // "" | ascii_downcase) == "informational")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+
+          # Fallback: if no severity-based counts, use simple level counting
+          if [ "$CRITICAL_COUNT" = "0" ] && [ "$HIGH_COUNT" = "0" ] && [ "$MEDIUM_COUNT" = "0" ] && [ "$LOW_COUNT" = "0" ] && [ "$INFO_COUNT" = "0" ]; then
+            # Simple fallback counting by SARIF level only
+            CRITICAL_COUNT=$(jq '[.runs[].results[] | select(.level == "error")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+            MEDIUM_COUNT=$(jq '[.runs[].results[] | select(.level == "warning")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+            LOW_COUNT=$(jq '[.runs[].results[] | select(.level == "note")] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+            INFO_COUNT=$(jq '[.runs[].results[] | select(.level == "none" or .level == null)] | length' "$RESULTS_FILE" 2>/dev/null || echo "0")
+          fi
+        else
+          echo "No results file to parse, using checker exit code"
+          if [ "$CHECKER_EXIT" != "0" ]; then
+            # Checker failed but no SARIF, assume critical error
+            CRITICAL_COUNT=1
+          fi
+        fi
+
+        # Calculate total
+        TOTAL_COUNT=$((CRITICAL_COUNT + HIGH_COUNT + MEDIUM_COUNT + LOW_COUNT + INFO_COUNT))
+
+        echo "=== Solution Checker Results ==="
+        echo "Critical: $CRITICAL_COUNT"
+        echo "High: $HIGH_COUNT"
+        echo "Medium: $MEDIUM_COUNT"
+        echo "Low: $LOW_COUNT"
+        echo "Informational: $INFO_COUNT"
+        echo "Total: $TOTAL_COUNT"
+        echo ""
+
+        # Set outputs
+        echo "critical_count=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
+        echo "high_count=$HIGH_COUNT" >> $GITHUB_OUTPUT
+        echo "medium_count=$MEDIUM_COUNT" >> $GITHUB_OUTPUT
+        echo "low_count=$LOW_COUNT" >> $GITHUB_OUTPUT
+        echo "informational_count=$INFO_COUNT" >> $GITHUB_OUTPUT
+        echo "total_count=$TOTAL_COUNT" >> $GITHUB_OUTPUT
+
+        # Determine pass/fail based on threshold
+        PASSED="true"
+        case "$FAIL_LEVEL" in
+          Critical)
+            if [ "$CRITICAL_COUNT" -gt 0 ]; then
+              PASSED="false"
+              echo "::error::Found $CRITICAL_COUNT critical issue(s)"
+            fi
+            ;;
+          High)
+            if [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ]; then
+              PASSED="false"
+              echo "::error::Found $CRITICAL_COUNT critical and $HIGH_COUNT high severity issue(s)"
+            fi
+            ;;
+          Medium)
+            if [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ] || [ "$MEDIUM_COUNT" -gt 0 ]; then
+              PASSED="false"
+              echo "::error::Found $CRITICAL_COUNT critical, $HIGH_COUNT high, and $MEDIUM_COUNT medium severity issue(s)"
+            fi
+            ;;
+          Low)
+            if [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ] || [ "$MEDIUM_COUNT" -gt 0 ] || [ "$LOW_COUNT" -gt 0 ]; then
+              PASSED="false"
+              echo "::error::Found issues above informational level"
+            fi
+            ;;
+          Informational)
+            if [ "$TOTAL_COUNT" -gt 0 ]; then
+              PASSED="false"
+              echo "::error::Found $TOTAL_COUNT issue(s)"
+            fi
+            ;;
+        esac
+
+        echo "passed=$PASSED" >> $GITHUB_OUTPUT
+
+        if [ "$PASSED" = "true" ]; then
+          echo "Solution passed quality check (threshold: $FAIL_LEVEL)"
+        else
+          echo "Solution failed quality check (threshold: $FAIL_LEVEL)"
+        fi
+
+    - name: Generate step summary
+      shell: bash
+      env:
+        PASSED: ${{ steps.evaluate.outputs.passed }}
+        CRITICAL: ${{ steps.evaluate.outputs.critical_count }}
+        HIGH: ${{ steps.evaluate.outputs.high_count }}
+        MEDIUM: ${{ steps.evaluate.outputs.medium_count }}
+        LOW: ${{ steps.evaluate.outputs.low_count }}
+        INFO: ${{ steps.evaluate.outputs.informational_count }}
+        TOTAL: ${{ steps.evaluate.outputs.total_count }}
+        FAIL_LEVEL: ${{ inputs.fail-on-level }}
+        RESULTS_FILE: ${{ steps.check.outputs.results_file }}
+      run: |
+        echo "## Solution Checker Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Status indicator
+        if [ "$PASSED" = "true" ]; then
+          echo "**Status: PASSED**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "**Status: FAILED**" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Results table
+        echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+        echo "| High | $HIGH |" >> $GITHUB_STEP_SUMMARY
+        echo "| Medium | $MEDIUM |" >> $GITHUB_STEP_SUMMARY
+        echo "| Low | $LOW |" >> $GITHUB_STEP_SUMMARY
+        echo "| Informational | $INFO |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Total** | **$TOTAL** |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Failure threshold: $FAIL_LEVEL" >> $GITHUB_STEP_SUMMARY
+
+        # Show top issues if any and results file exists
+        if [ -n "$RESULTS_FILE" ] && [ -f "$RESULTS_FILE" ] && [ "$TOTAL" -gt 0 ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Top Issues" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Extract up to 10 issues
+          jq -r '.runs[].results[:10][] | "[\(.level // "unknown")] \(.ruleId): \(.message.text[:100])"' "$RESULTS_FILE" 2>/dev/null | head -10 >> $GITHUB_STEP_SUMMARY || echo "Could not parse issues" >> $GITHUB_STEP_SUMMARY
+
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          if [ "$TOTAL" -gt 10 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "_...and $((TOTAL - 10)) more issues_" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+
+    - name: Fail if threshold exceeded
+      if: steps.evaluate.outputs.passed == 'false'
+      shell: bash
+      run: |
+        echo "::error::Solution Checker found issues exceeding the ${{ inputs.fail-on-level }} threshold"
+        exit 1
