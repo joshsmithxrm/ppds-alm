@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Workflow session ID regeneration
   - Whitespace-only changes
   - Git R100 renames (100% identical content)
-  - MissingDependency version reference updates
+  - Schema version reference updates
 - **Solution Checker Integration** - Quality validation with severity-based pass/fail
 - **Deployment Settings** - Auto-detection and application of environment-specific configuration
 - **Build Pipeline** - Full .NET solution build with plugin assembly/package copy

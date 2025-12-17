@@ -100,20 +100,25 @@ runs:
         echo "Running Solution Checker on: $SOLUTION_PATH"
         echo "Geography: $GEOGRAPHY"
 
-        # Build the command
-        CHECK_CMD="pac solution check --path \"$SOLUTION_PATH\" --outputDirectory \"$OUTPUT_DIR\" --geo $GEOGRAPHY"
+        # Build the command as an array (safer than eval)
+        CHECK_ARGS=(
+          "pac" "solution" "check"
+          "--path" "$SOLUTION_PATH"
+          "--outputDirectory" "$OUTPUT_DIR"
+          "--geo" "$GEOGRAPHY"
+        )
 
         # Add rule level override if specified
         if [ -n "$RULE_OVERRIDE" ] && [ -f "$RULE_OVERRIDE" ]; then
-          CHECK_CMD="$CHECK_CMD --ruleLevelOverride \"$RULE_OVERRIDE\""
+          CHECK_ARGS+=("--ruleLevelOverride" "$RULE_OVERRIDE")
           echo "Using rule level override: $RULE_OVERRIDE"
         fi
 
-        echo "Running: $CHECK_CMD"
+        echo "Running: ${CHECK_ARGS[*]}"
 
         # Run the checker (it may return non-zero if issues found, so we capture the exit code)
         set +e
-        eval "$CHECK_CMD" 2>&1
+        "${CHECK_ARGS[@]}" 2>&1
         EXIT_CODE=$?
         set -e
 

@@ -193,7 +193,7 @@ runs:
         echo "Running tests..."
 
         # Check if test projects exist
-        TEST_PROJECTS=$(find . -name "*.Tests.csproj" -o -name "*Tests.csproj" 2>/dev/null | head -5)
+        TEST_PROJECTS=$(find . -name "*Tests.csproj" 2>/dev/null | head -5)
 
         if [ -z "$TEST_PROJECTS" ]; then
           echo "No test projects found"

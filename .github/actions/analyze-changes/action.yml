@@ -183,16 +183,17 @@ runs:
             fi
           fi
 
-          # Pattern 5: MissingDependency version reference changes
+          # Pattern 5: schemaVersion reference changes
+          # Note: MissingDependency changes are NOT filtered as they indicate real dependency changes
           if [[ "$FILE" == *"Solution.xml" ]] || [[ "$FILE" == *"Customizations.xml" ]]; then
             DIFF_CONTENT=$(git diff --cached -- "$FILE" 2>/dev/null || echo "")
 
-            # Check if only MissingDependency or schemaVersion changed
-            OTHER_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" | grep -Ev "(MissingDependency|schemaVersion|<Version>)" || true)
+            # Check if only schemaVersion changed (not MissingDependency - those are real changes)
+            OTHER_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" | grep -Ev "(schemaVersion|<Version>)" || true)
 
             if [ -z "$OTHER_CHANGES" ] && [ "$IS_NOISE" = false ]; then
               IS_NOISE=true
-              NOISE_REASON="Dependency version reference update"
+              NOISE_REASON="Schema version reference update"
             fi
           fi
 
