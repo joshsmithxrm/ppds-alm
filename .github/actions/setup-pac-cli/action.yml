@@ -1,0 +1,72 @@
+# =============================================================================
+# Composite Action: Setup PAC CLI
+# =============================================================================
+# Installs .NET SDK and Power Platform CLI for use in workflows.
+#
+# Usage:
+#   - name: Setup PAC CLI
+#     uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v1
+#
+#   # Pin to specific version (recommended for production stability)
+#   - name: Setup PAC CLI
+#     uses: joshsmithxrm/ppds-alm/.github/actions/setup-pac-cli@v1
+#     with:
+#       pac-version: '1.35.5'
+#
+# Version Pinning:
+#   - Default: empty (installs latest version)
+#   - Set pac-version to pin a specific version for reproducible builds
+#   - Find versions at: https://www.nuget.org/packages/Microsoft.PowerApps.CLI.Tool
+#
+# =============================================================================
+
+name: 'Setup PAC CLI'
+description: 'Install .NET SDK and Power Platform CLI'
+
+branding:
+  icon: 'terminal'
+  color: 'purple'
+
+inputs:
+  dotnet-version:
+    description: '.NET SDK version to install'
+    required: false
+    default: '8.x'
+  pac-version:
+    description: 'PAC CLI version to install (empty = latest)'
+    required: false
+    default: ''
+
+outputs:
+  pac-version:
+    description: 'Installed PAC CLI version'
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: Install Power Platform CLI
+      id: install
+      shell: bash
+      env:
+        PAC_VERSION: ${{ inputs.pac-version }}
+      run: |
+        if [ -n "$PAC_VERSION" ]; then
+          echo "Installing PAC CLI version: $PAC_VERSION"
+          dotnet tool install --global Microsoft.PowerApps.CLI.Tool --version "$PAC_VERSION"
+        else
+          echo "Installing latest PAC CLI version"
+          dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+        fi
+
+        echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+        # Get installed version
+        VERSION=$(dotnet tool list --global | grep -i "microsoft.powerapps.cli.tool" | awk '{print $2}')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Installed PAC CLI version: $VERSION"

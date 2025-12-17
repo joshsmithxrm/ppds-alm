@@ -1,0 +1,440 @@
+# =============================================================================
+# Composite Action: Import Solution
+# =============================================================================
+# Imports a Power Platform solution into the authenticated environment with
+# enterprise-grade features:
+#   - Version comparison (skip if target has same or newer version)
+#   - Smart retry logic for transient failures
+#   - Deployment settings file support
+#   - Detailed import summary
+#
+# Prerequisites:
+#   - Must authenticate first using pac-auth action
+#
+# Usage:
+#   - name: Import solution
+#     uses: joshsmithxrm/ppds-alm/.github/actions/import-solution@v1
+#     with:
+#       solution-path: ./exports/MySolution_managed.zip
+#       solution-name: MySolution
+#       skip-if-same-version: 'true'
+#       max-retries: '3'
+#       settings-file: ./config/prod.deploymentsettings.json
+#
+# =============================================================================
+
+name: 'Import Solution'
+description: 'Import Power Platform solution with version check, retry logic, and settings support'
+
+branding:
+  icon: 'upload'
+  color: 'purple'
+
+inputs:
+  solution-path:
+    description: 'Path to solution zip file'
+    required: true
+  solution-name:
+    description: 'Solution unique name (required for version check)'
+    required: false
+    default: ''
+  force-overwrite:
+    description: 'Force overwrite if solution exists'
+    required: false
+    default: 'true'
+  publish-changes:
+    description: 'Publish customizations after import'
+    required: false
+    default: 'true'
+  async:
+    description: 'Use async import (recommended for large solutions)'
+    required: false
+    default: 'true'
+  cleanup:
+    description: 'Delete solution zip after import'
+    required: false
+    default: 'true'
+  skip-if-same-version:
+    description: 'Skip import if target environment has same or newer version'
+    required: false
+    default: 'true'
+  max-retries:
+    description: 'Maximum retry attempts for transient failures'
+    required: false
+    default: '3'
+  retry-delay-seconds:
+    description: 'Delay between retries in seconds'
+    required: false
+    default: '300'
+  settings-file:
+    description: 'Path to deployment settings JSON file'
+    required: false
+    default: ''
+
+outputs:
+  imported:
+    description: 'Whether the solution was imported (false if skipped)'
+    value: ${{ steps.import.outputs.imported }}
+  skipped:
+    description: 'Whether import was skipped due to version match'
+    value: ${{ steps.version-check.outputs.skipped }}
+  import-version:
+    description: 'Version of the solution being imported'
+    value: ${{ steps.version-check.outputs.import_version }}
+  target-version:
+    description: 'Version currently in target environment'
+    value: ${{ steps.version-check.outputs.target_version }}
+  retry-count:
+    description: 'Number of retry attempts made'
+    value: ${{ steps.import.outputs.retry_count }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Extract solution version
+      id: version-check
+      shell: bash
+      env:
+        SOLUTION_PATH: ${{ inputs.solution-path }}
+        SOLUTION_NAME: ${{ inputs.solution-name }}
+        SKIP_IF_SAME: ${{ inputs.skip-if-same-version }}
+      run: |
+        set -euo pipefail
+
+        echo "Extracting version from solution package..."
+
+        # Create temp directory for extraction
+        TEMP_DIR=$(mktemp -d)
+        trap "rm -rf $TEMP_DIR" EXIT
+
+        # Extract Solution.xml from the zip
+        if unzip -q "$SOLUTION_PATH" "Other/Solution.xml" -d "$TEMP_DIR" 2>/dev/null; then
+          # Parse version from Solution.xml
+          IMPORT_VERSION=$(grep -oP '(?<=<Version>)[^<]+' "$TEMP_DIR/Other/Solution.xml" | head -1 || echo "")
+
+          if [ -n "$IMPORT_VERSION" ]; then
+            echo "Import version: $IMPORT_VERSION"
+            echo "import_version=$IMPORT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Could not extract version from solution"
+            echo "import_version=unknown" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "::warning::Could not extract Solution.xml from package"
+          echo "import_version=unknown" >> $GITHUB_OUTPUT
+        fi
+
+        # Check target environment version if solution name provided
+        if [ -n "$SOLUTION_NAME" ] && [ "$SKIP_IF_SAME" = "true" ]; then
+          echo "Checking target environment for existing solution..."
+
+          # Get solution list from target environment
+          if SOLUTION_LIST=$(pac solution list --json 2>/dev/null); then
+            # Parse the version for this solution
+            TARGET_VERSION=$(echo "$SOLUTION_LIST" | jq -r --arg name "$SOLUTION_NAME" '.[] | select(.uniquename==$name or .UniqueName==$name or .uniqueName==$name) | .version // .Version // empty' | head -1 || echo "")
+
+            if [ -n "$TARGET_VERSION" ]; then
+              echo "Target version: $TARGET_VERSION"
+              echo "target_version=$TARGET_VERSION" >> $GITHUB_OUTPUT
+
+              # Compare versions
+              IMPORT_VERSION="${IMPORT_VERSION:-0.0.0.0}"
+
+              # Version comparison function (returns 0 if v1 >= v2)
+              version_gte() {
+                local v1="$1"
+                local v2="$2"
+                # Normalize to 4 parts
+                v1=$(echo "$v1" | awk -F. '{printf "%d.%d.%d.%d", $1+0, $2+0, $3+0, $4+0}')
+                v2=$(echo "$v2" | awk -F. '{printf "%d.%d.%d.%d", $1+0, $2+0, $3+0, $4+0}')
+
+                # Compare using sort -V
+                local highest=$(printf '%s\n%s' "$v1" "$v2" | sort -V | tail -1)
+                [ "$v1" = "$highest" ]
+              }
+
+              if version_gte "$TARGET_VERSION" "$IMPORT_VERSION"; then
+                echo "Target environment has same or newer version ($TARGET_VERSION >= $IMPORT_VERSION)"
+                echo "skipped=true" >> $GITHUB_OUTPUT
+              else
+                echo "Target environment has older version ($TARGET_VERSION < $IMPORT_VERSION)"
+                echo "skipped=false" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "Solution not found in target environment (new installation)"
+              echo "target_version=not_installed" >> $GITHUB_OUTPUT
+              echo "skipped=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "::warning::Could not query target environment solutions"
+            echo "target_version=unknown" >> $GITHUB_OUTPUT
+            echo "skipped=false" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "Version check skipped (no solution name or skip disabled)"
+          echo "target_version=not_checked" >> $GITHUB_OUTPUT
+          echo "skipped=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Import solution
+      id: import
+      if: steps.version-check.outputs.skipped != 'true'
+      shell: bash
+      env:
+        SOLUTION_PATH: ${{ inputs.solution-path }}
+        SOLUTION_NAME: ${{ inputs.solution-name }}
+        IMPORT_VERSION: ${{ steps.version-check.outputs.import_version }}
+        SKIP_IF_SAME: ${{ inputs.skip-if-same-version }}
+        FORCE_OVERWRITE: ${{ inputs.force-overwrite }}
+        PUBLISH_CHANGES: ${{ inputs.publish-changes }}
+        ASYNC: ${{ inputs.async }}
+        MAX_RETRIES: ${{ inputs.max-retries }}
+        RETRY_DELAY: ${{ inputs.retry-delay-seconds }}
+        SETTINGS_FILE: ${{ inputs.settings-file }}
+      run: |
+        set -euo pipefail
+
+        echo "Importing solution: $SOLUTION_PATH"
+
+        # Build base import command
+        build_import_cmd() {
+          local cmd="pac solution import --path \"$SOLUTION_PATH\""
+
+          if [ "$FORCE_OVERWRITE" = "true" ]; then
+            cmd="$cmd --force-overwrite"
+          fi
+
+          if [ "$PUBLISH_CHANGES" = "true" ]; then
+            cmd="$cmd --publish-changes"
+          fi
+
+          if [ "$ASYNC" = "true" ]; then
+            cmd="$cmd --async"
+          fi
+
+          if [ -n "$SETTINGS_FILE" ] && [ -f "$SETTINGS_FILE" ]; then
+            cmd="$cmd --settings-file \"$SETTINGS_FILE\""
+          fi
+
+          echo "$cmd"
+        }
+
+        IMPORT_CMD=$(build_import_cmd)
+        echo "Import command: $IMPORT_CMD"
+
+
+        # Log deployment settings separately (not in the command string)
+        if [ -n "$SETTINGS_FILE" ] && [ -f "$SETTINGS_FILE" ]; then
+          echo "Using deployment settings: $SETTINGS_FILE"
+        fi
+
+        # Deterministic error patterns - NEVER retry these
+        DETERMINISTIC_PATTERNS=(
+          "File not found"
+          "does not exist"
+          "missing dependency"
+          "Missing component"
+          "cannot be deleted"
+          "cannot be updated"
+          "access denied"
+          "unauthorized"
+        )
+
+        # Transient error patterns that warrant retry
+        # NARROW: Only retry concurrent import conflicts - the one transient error
+        # we've seen in real-world Dataverse deployments. This happens when
+        # Microsoft system solutions are being updated at the same time.
+        # All other errors should fail fast for investigation.
+        TRANSIENT_PATTERNS=(
+          "Cannot start another"
+          "another solution at the same time"
+          "try again later"
+        )
+
+        is_deterministic_error() {
+          local error_msg="$1"
+          local pattern
+          shopt -s nocasematch
+          for pattern in "${DETERMINISTIC_PATTERNS[@]}"; do
+            if [[ "$error_msg" == *"$pattern"* ]]; then
+              shopt -u nocasematch
+              return 0
+            fi
+          done
+          shopt -u nocasematch
+          return 1
+        }
+
+        is_transient_error() {
+          local error_msg="$1"
+          local pattern
+          # First check if it's a deterministic error - never retry those
+          if is_deterministic_error "$error_msg"; then
+            return 1
+          fi
+          # Then check for transient patterns
+          shopt -s nocasematch
+          for pattern in "${TRANSIENT_PATTERNS[@]}"; do
+            if [[ "$error_msg" == *"$pattern"* ]]; then
+              shopt -u nocasematch
+              return 0
+            fi
+          done
+          shopt -u nocasematch
+          return 1
+        }
+
+        # Version comparison function (returns 0 if v1 >= v2)
+        version_gte() {
+          local v1="$1"
+          local v2="$2"
+          v1=$(echo "$v1" | awk -F. '{printf "%d.%d.%d.%d", $1+0, $2+0, $3+0, $4+0}')
+          v2=$(echo "$v2" | awk -F. '{printf "%d.%d.%d.%d", $1+0, $2+0, $3+0, $4+0}')
+          local highest=$(printf '%s\n%s' "$v1" "$v2" | sort -V | tail -1)
+          [ "$v1" = "$highest" ]
+        }
+
+        # Re-check target version before retry (another process may have succeeded)
+        should_skip_retry() {
+          if [ -z "$SOLUTION_NAME" ] || [ "$SKIP_IF_SAME" != "true" ]; then
+            return 1  # Can't skip, no solution name or skip disabled
+          fi
+
+          echo "Re-checking target environment version before retry..."
+
+          if SOLUTION_LIST=$(pac solution list --json 2>/dev/null); then
+            TARGET_VERSION=$(echo "$SOLUTION_LIST" | jq -r --arg name "$SOLUTION_NAME" '.[] | select(.uniquename==$name or .UniqueName==$name or .uniqueName==$name) | .version // .Version // empty' | head -1 || echo "")
+
+            if [ -n "$TARGET_VERSION" ]; then
+              echo "Current target version: $TARGET_VERSION"
+              echo "Our import version: $IMPORT_VERSION"
+
+              if version_gte "$TARGET_VERSION" "$IMPORT_VERSION"; then
+                echo "Target now has same or newer version - another process succeeded"
+                return 0  # Should skip
+              fi
+            fi
+          fi
+
+          return 1  # Should not skip, proceed with retry
+        }
+
+        # Retry loop
+        ATTEMPT=1
+        MAX_ATTEMPTS=$((MAX_RETRIES + 1))
+        IMPORT_OUTPUT=""
+
+        while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+          echo ""
+          echo "=== Import Attempt $ATTEMPT of $MAX_ATTEMPTS ==="
+
+          # Create temp file for output
+          OUTPUT_FILE=$(mktemp)
+          trap "rm -f $OUTPUT_FILE" EXIT
+
+          # Run import command
+          set +e
+          eval "$IMPORT_CMD" 2>&1 | tee "$OUTPUT_FILE"
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+
+          IMPORT_OUTPUT=$(cat "$OUTPUT_FILE")
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo ""
+            echo "Import successful on attempt $ATTEMPT"
+            echo "imported=true" >> $GITHUB_OUTPUT
+            echo "retry_count=$((ATTEMPT - 1))" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo ""
+          echo "Import failed with exit code: $EXIT_CODE"
+
+          # Check if error is transient
+          if is_transient_error "$IMPORT_OUTPUT"; then
+            echo "Transient error detected (concurrent import conflict)"
+
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              echo "Waiting ${RETRY_DELAY} seconds before retry..."
+              sleep "$RETRY_DELAY"
+
+              # Re-check version before retry - another process may have succeeded
+              if should_skip_retry; then
+                echo "Skipping retry - target environment already updated"
+                echo "imported=true" >> $GITHUB_OUTPUT
+                echo "retry_count=$((ATTEMPT))" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+            else
+              echo "::error::Max retry attempts exceeded"
+            fi
+          else
+            echo "::error::Non-transient error detected, failing immediately"
+            echo "imported=false" >> $GITHUB_OUTPUT
+            echo "retry_count=$((ATTEMPT - 1))" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          ATTEMPT=$((ATTEMPT + 1))
+        done
+
+        # If we get here, all retries failed
+        echo "imported=false" >> $GITHUB_OUTPUT
+        echo "retry_count=$((MAX_ATTEMPTS - 1))" >> $GITHUB_OUTPUT
+        exit 1
+
+    - name: Skip notification
+      if: steps.version-check.outputs.skipped == 'true'
+      shell: bash
+      run: |
+        echo "::notice::Import skipped - target environment has same or newer version"
+        echo "Target version: ${{ steps.version-check.outputs.target_version }}"
+        echo "Import version: ${{ steps.version-check.outputs.import_version }}"
+
+    - name: Set skipped output
+      if: steps.version-check.outputs.skipped == 'true'
+      shell: bash
+      run: |
+        echo "imported=false" >> $GITHUB_OUTPUT
+
+    - name: Clean up solution zip
+      if: inputs.cleanup == 'true' && steps.version-check.outputs.skipped != 'true'
+      shell: bash
+      run: |
+        echo "Cleaning up: ${{ inputs.solution-path }}"
+        rm -f "${{ inputs.solution-path }}"
+
+    - name: Generate step summary
+      shell: bash
+      env:
+        IMPORTED: ${{ steps.import.outputs.imported }}
+        SKIPPED: ${{ steps.version-check.outputs.skipped }}
+        IMPORT_VERSION: ${{ steps.version-check.outputs.import_version }}
+        TARGET_VERSION: ${{ steps.version-check.outputs.target_version }}
+        RETRY_COUNT: ${{ steps.import.outputs.retry_count }}
+        SETTINGS_FILE: ${{ inputs.settings-file }}
+      run: |
+        echo "## Import Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Solution | \`$(basename "${{ inputs.solution-path }}")\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Import Version | ${IMPORT_VERSION:-unknown} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Target Version | ${TARGET_VERSION:-unknown} |" >> $GITHUB_STEP_SUMMARY
+
+        if [ "$SKIPPED" = "true" ]; then
+          echo "| Status | **Skipped** (version match) |" >> $GITHUB_STEP_SUMMARY
+        elif [ "$IMPORTED" = "true" ]; then
+          echo "| Status | **Success** |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "| Status | **Failed** |" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ -n "$RETRY_COUNT" ] && [ "$RETRY_COUNT" != "0" ]; then
+          echo "| Retry Attempts | $RETRY_COUNT |" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ -n "$SETTINGS_FILE" ] && [ -f "$SETTINGS_FILE" ]; then
+          echo "| Settings File | \`$SETTINGS_FILE\` |" >> $GITHUB_STEP_SUMMARY
+        fi

@@ -1,116 +1,133 @@
-# github/workflows/solution-import.yml
-# Reusable workflow: Import solution to Dataverse environment
+# =============================================================================
+# Reusable Workflow: Import Solution
+# =============================================================================
+# Imports a Power Platform solution into a Dataverse environment.
+#
+# Features:
+#   - Version comparison (skip if target has same/newer version)
+#   - Smart retry logic for transient failures
+#   - Deployment settings file support
+#   - Detailed import summary
+#
+# Usage:
+#   jobs:
+#     import:
+#       uses: joshsmithxrm/ppds-alm/github/workflows/solution-import.yml@v1
+#       with:
+#         solution-path: ./exports/MySolution_managed.zip
+#         solution-name: MySolution
+#       secrets:
+#         environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+#         tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+#         client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+#         client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
+#
+# =============================================================================
+
 name: Import Solution
 
 on:
   workflow_call:
     inputs:
-      environment-url:
-        description: 'Dataverse environment URL (e.g., https://org.crm.dynamics.com)'
+      solution-path:
+        description: 'Path to solution zip file to import'
         required: true
         type: string
-      solution-file:
-        description: 'Path to the solution zip file to import'
-        required: true
+      solution-name:
+        description: 'Solution unique name (required for version check)'
+        required: false
         type: string
+        default: ''
+      skip-if-same-version:
+        description: 'Skip import if target has same or newer version'
+        required: false
+        type: boolean
+        default: true
+      max-retries:
+        description: 'Maximum retry attempts for transient failures'
+        required: false
+        type: number
+        default: 3
+      settings-file:
+        description: 'Path to deployment settings JSON file'
+        required: false
+        type: string
+        default: ''
       publish-changes:
         description: 'Publish customizations after import'
         required: false
         type: boolean
         default: true
-      activate-plugins:
-        description: 'Activate plugin steps after import'
-        required: false
-        type: boolean
-        default: true
-      overwrite-unmanaged:
-        description: 'Overwrite unmanaged customizations'
-        required: false
-        type: boolean
-        default: false
-      working-directory:
-        description: 'Working directory for the workflow'
-        required: false
-        type: string
-        default: '.'
+
     secrets:
-      client-id:
-        description: 'Azure AD application client ID'
-        required: true
-      client-secret:
-        description: 'Azure AD application client secret'
+      environment-url:
+        description: 'Power Platform environment URL'
         required: true
       tenant-id:
         description: 'Azure AD tenant ID'
         required: true
+      client-id:
+        description: 'Service principal client ID'
+        required: true
+      client-secret:
+        description: 'Service principal client secret'
+        required: true
+
+    outputs:
+      deployed:
+        description: 'Whether deployment completed successfully'
+        value: ${{ jobs.import.outputs.deployed }}
+      skipped:
+        description: 'Whether deployment was skipped (version match)'
+        value: ${{ jobs.import.outputs.skipped }}
+      import-version:
+        description: 'Version that was imported'
+        value: ${{ jobs.import.outputs.import-version }}
+      target-version:
+        description: 'Version in target environment before import'
+        value: ${{ jobs.import.outputs.target-version }}
 
 jobs:
   import:
     name: Import Solution
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
+
+    outputs:
+      deployed: ${{ steps.import.outputs.imported }}
+      skipped: ${{ steps.import.outputs.skipped }}
+      import-version: ${{ steps.import.outputs.import-version }}
+      target-version: ${{ steps.import.outputs.target-version }}
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Download Solution Artifact
+      - name: Download solution artifact
         uses: actions/download-artifact@v7
         with:
-          name: solution-*
-          path: ${{ inputs.working-directory }}/artifacts
+          pattern: solution-*
+          path: ./artifacts
+          merge-multiple: true
         continue-on-error: true
 
-      - name: Install Power Platform CLI
-        run: |
-          dotnet tool install --global Microsoft.PowerApps.CLI.Tool
-          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+      - name: Setup PAC CLI
+        uses: ./.github/actions/setup-pac-cli
 
-      - name: Authenticate to Dataverse
-        env:
-          DATAVERSE_URL: ${{ inputs.environment-url }}
-          CLIENT_ID: ${{ secrets.client-id }}
-          CLIENT_SECRET: ${{ secrets.client-secret }}
-          TENANT_ID: ${{ secrets.tenant-id }}
-        run: |
-          pac auth create \
-            --url "$DATAVERSE_URL" \
-            --applicationId "$CLIENT_ID" \
-            --clientSecret "$CLIENT_SECRET" \
-            --tenant "$TENANT_ID"
+      - name: Authenticate to environment
+        uses: ./.github/actions/pac-auth
+        with:
+          environment-url: ${{ secrets.environment-url }}
+          tenant-id: ${{ secrets.tenant-id }}
+          client-id: ${{ secrets.client-id }}
+          client-secret: ${{ secrets.client-secret }}
 
-      - name: Import Solution
-        env:
-          SOLUTION_FILE: ${{ inputs.solution-file }}
-          PUBLISH: ${{ inputs.publish-changes }}
-          ACTIVATE: ${{ inputs.activate-plugins }}
-          OVERWRITE: ${{ inputs.overwrite-unmanaged }}
-        run: |
-          IMPORT_FLAGS=""
-
-          if [ "$PUBLISH" = "true" ]; then
-            IMPORT_FLAGS="$IMPORT_FLAGS --publish-changes"
-          fi
-
-          if [ "$ACTIVATE" = "true" ]; then
-            IMPORT_FLAGS="$IMPORT_FLAGS --activate-plugins"
-          fi
-
-          if [ "$OVERWRITE" = "true" ]; then
-            IMPORT_FLAGS="$IMPORT_FLAGS --force-overwrite"
-          fi
-
-          echo "Importing solution from $SOLUTION_FILE..."
-          pac solution import \
-            --path "$SOLUTION_FILE" \
-            $IMPORT_FLAGS
-
-          echo "Solution import complete."
-
-      - name: Publish Customizations
-        if: ${{ inputs.publish-changes }}
-        run: |
-          echo "Publishing all customizations..."
-          pac solution publish
-          echo "Publish complete."
+      - name: Import solution
+        id: import
+        uses: ./.github/actions/import-solution
+        with:
+          solution-path: ${{ inputs.solution-path }}
+          solution-name: ${{ inputs.solution-name }}
+          skip-if-same-version: ${{ inputs.skip-if-same-version && 'true' || 'false' }}
+          max-retries: ${{ inputs.max-retries }}
+          settings-file: ${{ inputs.settings-file }}
+          publish-changes: ${{ inputs.publish-changes && 'true' || 'false' }}

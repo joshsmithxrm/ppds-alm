@@ -25,11 +25,11 @@ jobs:
           done
           echo "All GitHub workflow files are valid YAML"
 
-      - name: Validate Azure DevOps template files
+      - name: Validate composite action files
         run: |
-          echo "Validating Azure DevOps template files..."
-          for file in azure-devops/templates/*.yml; do
+          echo "Validating composite action files..."
+          for file in .github/actions/*/action.yml; do
             echo "Checking $file"
             python3 -c "import yaml; yaml.safe_load(open('$file'))" || exit 1
           done
-          echo "All Azure DevOps template files are valid YAML"
+          echo "All composite action files are valid YAML"

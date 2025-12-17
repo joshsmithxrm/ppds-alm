@@ -1,14 +1,31 @@
-# github/workflows/plugin-deploy.yml
-# Reusable workflow: Deploy plugins to Dataverse
+# =============================================================================
+# Reusable Workflow: Deploy Plugins
+# =============================================================================
+# Deploys plugins to a Dataverse environment using PPDS.Tools.
+#
+# Features:
+#   - Drift detection (identifies changes between source and target)
+#   - Uses PPDS.Tools PowerShell module for deployment
+#
+# Usage:
+#   jobs:
+#     deploy:
+#       uses: joshsmithxrm/ppds-alm/github/workflows/plugin-deploy.yml@v1
+#       with:
+#         registration-file: ./registrations.json
+#       secrets:
+#         environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+#         tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+#         client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+#         client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
+#
+# =============================================================================
+
 name: Deploy Plugins
 
 on:
   workflow_call:
     inputs:
-      environment-url:
-        description: 'Dataverse environment URL (e.g., https://org.crm.dynamics.com)'
-        required: true
-        type: string
       registration-file:
         description: 'Path to plugin registrations JSON file'
         required: false
@@ -19,32 +36,44 @@ on:
         required: false
         type: boolean
         default: true
-      working-directory:
-        description: 'Working directory for the workflow'
-        required: false
-        type: string
-        default: '.'
+
     secrets:
-      client-id:
-        description: 'Azure AD application client ID'
-        required: true
-      client-secret:
-        description: 'Azure AD application client secret'
+      environment-url:
+        description: 'Power Platform environment URL'
         required: true
       tenant-id:
         description: 'Azure AD tenant ID'
         required: true
+      client-id:
+        description: 'Service principal client ID'
+        required: true
+      client-secret:
+        description: 'Service principal client secret'
+        required: true
+
+    outputs:
+      deployed:
+        description: 'Whether plugins were deployed'
+        value: ${{ jobs.deploy.outputs.deployed }}
+      drift-detected:
+        description: 'Whether drift was detected'
+        value: ${{ jobs.deploy.outputs.drift-detected }}
 
 jobs:
   deploy:
     name: Deploy Plugins
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
+
+    outputs:
+      deployed: ${{ steps.deploy.outputs.deployed }}
+      drift-detected: ${{ steps.drift.outputs.detected }}
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Setup PAC CLI
+        uses: ./.github/actions/setup-pac-cli
 
       - name: Install PPDS.Tools
         shell: pwsh
@@ -57,7 +86,7 @@ jobs:
       - name: Connect to Dataverse
         shell: pwsh
         env:
-          DATAVERSE_URL: ${{ inputs.environment-url }}
+          DATAVERSE_URL: ${{ secrets.environment-url }}
           CLIENT_ID: ${{ secrets.client-id }}
           CLIENT_SECRET: ${{ secrets.client-secret }}
           TENANT_ID: ${{ secrets.tenant-id }}
@@ -69,8 +98,9 @@ jobs:
             -ClientSecret $secureSecret `
             -TenantId $env:TENANT_ID
 
-      - name: Detect Drift
-        if: ${{ inputs.detect-drift }}
+      - name: Detect drift
+        id: drift
+        if: inputs.detect-drift
         shell: pwsh
         run: |
           Write-Host "Detecting plugin drift..."
@@ -78,11 +108,14 @@ jobs:
           if ($drift) {
             Write-Host "::warning::Plugin drift detected. Review changes below:"
             $drift | ConvertTo-Json -Depth 10
+            "detected=true" >> $env:GITHUB_OUTPUT
           } else {
             Write-Host "No drift detected."
+            "detected=false" >> $env:GITHUB_OUTPUT
           }
 
-      - name: Deploy Plugins
+      - name: Deploy plugins
+        id: deploy
         shell: pwsh
         run: |
           Write-Host "Deploying plugins from ${{ inputs.registration-file }}..."
@@ -94,3 +127,15 @@ jobs:
           }
           Deploy-DataversePlugins @params
           Write-Host "Plugin deployment complete."
+          "deployed=true" >> $env:GITHUB_OUTPUT
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          echo "## Plugin Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Registration File | \`${{ inputs.registration-file }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Drift Detected | ${{ steps.drift.outputs.detected || 'Not checked' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployed | ${{ steps.deploy.outputs.deployed }} |" >> $GITHUB_STEP_SUMMARY

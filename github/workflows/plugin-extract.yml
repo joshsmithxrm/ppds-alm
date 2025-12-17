@@ -1,5 +1,17 @@
-# github/workflows/plugin-extract.yml
-# Reusable workflow: Extract plugin registrations from compiled assembly
+# =============================================================================
+# Reusable Workflow: Extract Plugin Registrations
+# =============================================================================
+# Extracts plugin registrations from a compiled assembly using PPDS.Tools.
+#
+# Usage:
+#   jobs:
+#     extract:
+#       uses: joshsmithxrm/ppds-alm/github/workflows/plugin-extract.yml@v1
+#       with:
+#         assembly-path: ./src/Plugins/bin/Release/net462/MyPlugins.dll
+#
+# =============================================================================
+
 name: Extract Plugin Registrations
 
 on:
@@ -14,11 +26,7 @@ on:
         required: false
         type: string
         default: './registrations.json'
-      working-directory:
-        description: 'Working directory for the workflow'
-        required: false
-        type: string
-        default: '.'
+
     outputs:
       registration-file:
         description: 'Path to the generated registrations file'
@@ -28,13 +36,12 @@ jobs:
   extract:
     name: Extract Registrations
     runs-on: ubuntu-latest
+
     outputs:
       registration-file: ${{ steps.extract.outputs.file }}
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v6
 
       - name: Install PPDS.Tools
@@ -44,7 +51,7 @@ jobs:
           Install-Module PPDS.Tools -Force -Scope CurrentUser
           Import-Module PPDS.Tools
 
-      - name: Extract Plugin Registrations
+      - name: Extract plugin registrations
         id: extract
         shell: pwsh
         run: |
@@ -57,9 +64,9 @@ jobs:
           Write-Host "Registrations extracted to ${{ inputs.output-path }}"
           "file=${{ inputs.output-path }}" >> $env:GITHUB_OUTPUT
 
-      - name: Upload Registrations Artifact
+      - name: Upload registrations artifact
         uses: actions/upload-artifact@v6
         with:
           name: plugin-registrations
-          path: ${{ inputs.working-directory }}/${{ inputs.output-path }}
+          path: ${{ inputs.output-path }}
           retention-days: 7

@@ -1,0 +1,88 @@
+# =============================================================================
+# Composite Action: PAC Auth
+# =============================================================================
+# Authenticates to a Power Platform environment using service principal.
+#
+# Usage:
+#   - name: Authenticate to environment
+#     uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v1
+#     with:
+#       environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+#       tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+#       client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+#       client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
+#
+# Prerequisites:
+#   - PAC CLI must be installed (use setup-pac-cli action first)
+#
+# =============================================================================
+
+name: 'PAC Auth'
+description: 'Authenticate to Power Platform environment using service principal'
+
+branding:
+  icon: 'key'
+  color: 'purple'
+
+inputs:
+  environment-url:
+    description: 'Power Platform environment URL (e.g., https://org.crm.dynamics.com/)'
+    required: true
+  tenant-id:
+    description: 'Azure AD tenant ID'
+    required: true
+  client-id:
+    description: 'Service principal application (client) ID'
+    required: true
+  client-secret:
+    description: 'Service principal client secret'
+    required: true
+  name:
+    description: 'Auth profile name (for multiple connections)'
+    required: false
+    default: 'default'
+
+outputs:
+  environment-id:
+    description: 'Connected environment ID'
+    value: ${{ steps.verify.outputs.environment-id }}
+  user-id:
+    description: 'Connected user/application ID'
+    value: ${{ steps.verify.outputs.user-id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Create auth profile
+      shell: bash
+      run: |
+        pac auth create \
+          --name "${{ inputs.name }}" \
+          --environment "${{ inputs.environment-url }}" \
+          --tenant "${{ inputs.tenant-id }}" \
+          --applicationId "${{ inputs.client-id }}" \
+          --clientSecret "${{ inputs.client-secret }}"
+
+    - name: Verify connection
+      id: verify
+      shell: bash
+      run: |
+        echo "Verifying connection..."
+
+        # Use JSON output for reliable parsing
+        WHO_OUTPUT=$(pac org who --json 2>/dev/null || pac org who)
+        echo "$WHO_OUTPUT"
+
+        # Try to parse as JSON first, fall back to text parsing
+        if echo "$WHO_OUTPUT" | jq -e . >/dev/null 2>&1; then
+          # JSON parsing (preferred)
+          ENV_ID=$(echo "$WHO_OUTPUT" | jq -r '.EnvironmentId // empty')
+          USER_ID=$(echo "$WHO_OUTPUT" | jq -r '.UserId // empty')
+        else
+          # Fallback to text parsing for older PAC versions
+          ENV_ID=$(echo "$WHO_OUTPUT" | grep -i "Environment ID" | sed 's/.*: *//' | tr -d '[:space:]')
+          USER_ID=$(echo "$WHO_OUTPUT" | grep -i "User ID" | sed 's/.*: *//' | tr -d '[:space:]')
+        fi
+
+        echo "environment-id=$ENV_ID" >> $GITHUB_OUTPUT
+        echo "user-id=$USER_ID" >> $GITHUB_OUTPUT
