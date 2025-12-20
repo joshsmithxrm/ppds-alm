@@ -273,7 +273,7 @@ CI/CD templates cannot be unit tested - they must be run in actual CI/CD environ
 | Dependency | Minimum | Used By |
 |------------|---------|---------|
 | PPDS.Tools | 1.1.0 | `plugin-deploy.yml`, `plugin-extract.yml` |
-| PAC CLI | 1.32.0 | Solution workflows |
+| PAC CLI | latest | `solution-*.yml` workflows |
 
 ### Consumed By
 

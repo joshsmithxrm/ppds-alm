@@ -79,7 +79,7 @@ jobs:
         shell: pwsh
         run: |
           Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module PPDS.Tools -Force -Scope CurrentUser
+          Install-Module PPDS.Tools -MinimumVersion '1.1.0' -Force -Scope CurrentUser
           Import-Module PPDS.Tools
           Get-Command -Module PPDS.Tools
 
