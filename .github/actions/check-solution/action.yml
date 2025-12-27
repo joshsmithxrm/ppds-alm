@@ -4,8 +4,11 @@
 # Runs the PowerApps Solution Checker to validate solution quality and
 # identify potential issues before deployment.
 #
+# Note: This action runs in anonymous mode (no authentication required).
+# The Solution Checker service validates the solution zip file using
+# Microsoft's standard rules.
+#
 # Prerequisites:
-#   - Must authenticate first using pac-auth action (optional, uses anonymous if not)
 #   - Solution must be packed as a zip file
 #
 # Usage:
