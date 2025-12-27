@@ -422,6 +422,10 @@ runs:
           exit 1
         fi
 
+        # Clear any stale auth profiles (follows Microsoft's pattern)
+        echo "Clearing stale auth profiles..."
+        pac auth clear 2>/dev/null || true
+
         # Re-authenticate with fresh token (prevents token expiration issue on long imports)
         echo "Re-authenticating to environment..."
         pac auth create \
@@ -491,3 +495,10 @@ runs:
         if [ -n "$SETTINGS_FILE" ] && [ -f "$SETTINGS_FILE" ]; then
           echo "| Settings File | \`$SETTINGS_FILE\` |" >> $GITHUB_STEP_SUMMARY
         fi
+
+    - name: Clear auth profiles
+      if: always()
+      shell: bash
+      run: |
+        # Clean up auth profiles to prevent stale credential issues (follows Microsoft's pattern)
+        pac auth clear 2>/dev/null || true
