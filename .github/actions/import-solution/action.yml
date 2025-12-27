@@ -70,6 +70,24 @@ inputs:
     description: 'Path to deployment settings JSON file'
     required: false
     default: ''
+  # Auth credentials for re-authentication before publish (fixes token expiration on long imports)
+  # See: https://github.com/joshsmithxrm/ppds-alm/issues/7
+  environment-url:
+    description: 'Power Platform environment URL (required if publish-changes is true)'
+    required: false
+    default: ''
+  tenant-id:
+    description: 'Azure AD tenant ID (required if publish-changes is true)'
+    required: false
+    default: ''
+  client-id:
+    description: 'Service principal client ID (required if publish-changes is true)'
+    required: false
+    default: ''
+  client-secret:
+    description: 'Service principal client secret (required if publish-changes is true)'
+    required: false
+    default: ''
 
 outputs:
   imported:
@@ -204,9 +222,9 @@ runs:
             cmd="$cmd --force-overwrite"
           fi
 
-          if [ "$PUBLISH_CHANGES" = "true" ]; then
-            cmd="$cmd --publish-changes"
-          fi
+          # NOTE: --publish-changes intentionally NOT included here (Issue #7)
+          # Publishing is handled in a separate step with fresh authentication
+          # to prevent OAuth token expiration on long-running imports (55+ min)
 
           if [ "$ASYNC" = "true" ]; then
             cmd="$cmd --async"
@@ -383,6 +401,41 @@ runs:
         echo "imported=false" >> $GITHUB_OUTPUT
         echo "retry_count=$((MAX_ATTEMPTS - 1))" >> $GITHUB_OUTPUT
         exit 1
+
+    - name: Publish customizations
+      id: publish
+      if: steps.import.outputs.imported == 'true' && inputs.publish-changes == 'true'
+      shell: bash
+      env:
+        ENVIRONMENT_URL: ${{ inputs.environment-url }}
+        TENANT_ID: ${{ inputs.tenant-id }}
+        CLIENT_ID: ${{ inputs.client-id }}
+        CLIENT_SECRET: ${{ inputs.client-secret }}
+      run: |
+        set -euo pipefail
+
+        echo "Publishing customizations with fresh authentication..."
+
+        # Validate auth credentials are provided
+        if [ -z "$ENVIRONMENT_URL" ] || [ -z "$TENANT_ID" ] || [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
+          echo "::error::Auth credentials required for publish. Provide environment-url, tenant-id, client-id, and client-secret inputs."
+          exit 1
+        fi
+
+        # Re-authenticate with fresh token (prevents token expiration issue on long imports)
+        echo "Re-authenticating to environment..."
+        pac auth create \
+          --name "publish-auth" \
+          --environment "$ENVIRONMENT_URL" \
+          --tenant "$TENANT_ID" \
+          --applicationId "$CLIENT_ID" \
+          --clientSecret "$CLIENT_SECRET"
+
+        # Publish all customizations
+        echo "Running pac solution publish..."
+        pac solution publish
+
+        echo "Publish completed successfully"
 
     - name: Skip notification
       if: steps.version-check.outputs.skipped == 'true'

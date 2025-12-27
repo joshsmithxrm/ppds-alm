@@ -302,6 +302,11 @@ jobs:
           max-retries: ${{ inputs.max-retries }}
           settings-file: ${{ steps.detect-settings.outputs.settings-file }}
           publish-changes: 'true'
+          # Auth credentials for re-auth before publish (Issue #7 - token expiration fix)
+          environment-url: ${{ secrets.environment-url }}
+          tenant-id: ${{ secrets.tenant-id }}
+          client-id: ${{ secrets.client-id }}
+          client-secret: ${{ secrets.client-secret }}
 
   summary:
     name: Deployment Summary

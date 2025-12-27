@@ -346,6 +346,11 @@ jobs:
           max-retries: 3
           settings-file: ${{ steps.detect-settings.outputs.settings-file }}
           publish-changes: 'true'
+          # Auth credentials for re-auth before publish (Issue #7 - token expiration fix)
+          environment-url: ${{ secrets.target-environment-url }}
+          tenant-id: ${{ secrets.target-tenant-id }}
+          client-id: ${{ secrets.target-client-id }}
+          client-secret: ${{ secrets.target-client-secret }}
 
       - name: Deploy plugins with PPDS.Tools
         if: inputs.deploy-ppds-plugins

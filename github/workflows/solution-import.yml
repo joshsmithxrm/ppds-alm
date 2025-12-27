@@ -131,3 +131,8 @@ jobs:
           max-retries: ${{ inputs.max-retries }}
           settings-file: ${{ inputs.settings-file }}
           publish-changes: ${{ inputs.publish-changes && 'true' || 'false' }}
+          # Auth credentials for re-auth before publish (Issue #7 - token expiration fix)
+          environment-url: ${{ secrets.environment-url }}
+          tenant-id: ${{ secrets.tenant-id }}
+          client-id: ${{ secrets.client-id }}
+          client-secret: ${{ secrets.client-secret }}
