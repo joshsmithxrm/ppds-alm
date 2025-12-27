@@ -4,6 +4,8 @@
 
 **Part of the PPDS Ecosystem** - See `C:\VS\ppds\CLAUDE.md` for cross-project context.
 
+**Consumption guidance:** See [CONSUMPTION_PATTERNS.md](../docs/CONSUMPTION_PATTERNS.md) for when consumers should use library vs CLI vs Tools.
+
 ---
 
 ## 🚫 NEVER
@@ -259,14 +261,49 @@ CI/CD templates cannot be unit tested - they must be run in actual CI/CD environ
 
 ---
 
-## 🔗 Ecosystem Integration
+## 🔗 Dependencies & Versioning
 
-**Depends on:**
-- `PPDS.Tools` PowerShell module (installed from PSGallery in workflows)
+### This Repo Produces
 
-**Used by:**
-- **ppds-demo** - Reference pipelines
-- **Customer projects** - Production ALM
+| Output | Distribution |
+|--------|--------------|
+| GitHub Actions workflows | Git tags |
+| Azure DevOps templates | Git tags |
+
+### Dependencies
+
+| Dependency | Minimum | Used By |
+|------------|---------|---------|
+| PPDS.Tools | 1.1.0 | `plugin-deploy.yml`, `plugin-extract.yml` |
+| PAC CLI | latest | `solution-*.yml` workflows |
+
+### Consumed By
+
+| Consumer | How | Breaking Change Impact |
+|----------|-----|------------------------|
+| ppds-demo | References workflows | Must update workflow refs |
+| Customer projects | References workflows | Must update workflow refs |
+
+### Version Sync Rules
+
+| Rule | Details |
+|------|---------|
+| Major versions | Sync with ppds-tools when using new cmdlet features |
+| Minor/patch | Independent |
+| Pre-release format | `-beta.N` suffix in git tag; do NOT update `v1` alias for pre-releases |
+
+### Breaking Changes Requiring Coordination
+
+- Changing required workflow inputs
+- Changing secret names
+- Updating to new PPDS.Tools major version
+
+### Pinning Dependencies
+
+```yaml
+# In plugin workflows, pin to minimum compatible Tools version:
+Install-Module PPDS.Tools -MinimumVersion '1.1.0' -Force
+```
 
 ---
 

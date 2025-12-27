@@ -185,6 +185,12 @@ ppds-alm/
 └── README.md
 ```
 
+## Compatibility
+
+| ALM Version | Requires PPDS.Tools |
+|-------------|---------------------|
+| v1.0.x | >= 1.1.0 |
+
 ## Versioning
 
 Use version tags for stability:
