@@ -136,13 +136,7 @@ jobs:
       - name: Setup PAC CLI
         uses: ./.github/actions/setup-pac-cli
 
-      - name: Authenticate to source environment
-        uses: ./.github/actions/pac-auth
-        with:
-          environment-url: ${{ secrets.source-environment-url }}
-          tenant-id: ${{ secrets.source-tenant-id }}
-          client-id: ${{ secrets.source-client-id }}
-          client-secret: ${{ secrets.source-client-secret }}
+      # Note: pac-auth step removed - export-solution is self-contained and manages its own auth lifecycle
 
       - name: Export solution
         id: export
@@ -151,6 +145,11 @@ jobs:
           solution-name: ${{ inputs.solution-name }}
           output-folder: ${{ inputs.solution-folder }}
           temp-folder: ./exports
+          # Auth credentials - action is self-contained (Issue #7)
+          environment-url: ${{ secrets.source-environment-url }}
+          tenant-id: ${{ secrets.source-tenant-id }}
+          client-id: ${{ secrets.source-client-id }}
+          client-secret: ${{ secrets.source-client-secret }}
 
       - name: Get exported version
         id: get-version
@@ -292,13 +291,7 @@ jobs:
       - name: Setup PAC CLI
         uses: ./.github/actions/setup-pac-cli
 
-      - name: Authenticate to target environment
-        uses: ./.github/actions/pac-auth
-        with:
-          environment-url: ${{ secrets.target-environment-url }}
-          tenant-id: ${{ secrets.target-tenant-id }}
-          client-id: ${{ secrets.target-client-id }}
-          client-secret: ${{ secrets.target-client-secret }}
+      # Note: pac-auth step removed - import-solution is self-contained and manages its own auth lifecycle
 
       - name: Detect deployment settings file
         id: detect-settings
@@ -346,7 +339,7 @@ jobs:
           max-retries: 3
           settings-file: ${{ steps.detect-settings.outputs.settings-file }}
           publish-changes: 'true'
-          # Auth credentials for re-auth before publish (Issue #7 - token expiration fix)
+          # Auth credentials - action is self-contained (Issue #7)
           environment-url: ${{ secrets.target-environment-url }}
           tenant-id: ${{ secrets.target-tenant-id }}
           client-id: ${{ secrets.target-client-id }}

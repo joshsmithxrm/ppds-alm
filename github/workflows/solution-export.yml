@@ -107,22 +107,33 @@ jobs:
       - name: Setup PAC CLI
         uses: ./.github/actions/setup-pac-cli
 
-      - name: Authenticate to environment
-        uses: ./.github/actions/pac-auth
-        with:
-          environment-url: ${{ secrets.environment-url }}
-          tenant-id: ${{ secrets.tenant-id }}
-          client-id: ${{ secrets.client-id }}
-          client-secret: ${{ secrets.client-secret }}
+      # Note: pac-auth step removed - export-solution is self-contained and manages its own auth lifecycle
 
       - name: Set solution version
         if: inputs.set-version != ''
+        env:
+          ENVIRONMENT_URL: ${{ secrets.environment-url }}
+          TENANT_ID: ${{ secrets.tenant-id }}
+          CLIENT_ID: ${{ secrets.client-id }}
+          CLIENT_SECRET: ${{ secrets.client-secret }}
         run: |
+          # Self-contained auth for version setting (follows Microsoft pattern)
+          pac auth clear 2>/dev/null || true
+          pac auth create \
+            --name "version-auth" \
+            --environment "$ENVIRONMENT_URL" \
+            --tenant "$TENANT_ID" \
+            --applicationId "$CLIENT_ID" \
+            --clientSecret "$CLIENT_SECRET"
+
           echo "Setting solution version to ${{ inputs.set-version }}"
           pac solution online-version \
             --solution-name "${{ inputs.solution-name }}" \
             --solution-version "${{ inputs.set-version }}"
           echo "Version set successfully"
+
+          # Clean up auth
+          pac auth clear 2>/dev/null || true
 
       - name: Export solution
         uses: ./.github/actions/export-solution
@@ -130,6 +141,11 @@ jobs:
           solution-name: ${{ inputs.solution-name }}
           output-folder: ${{ inputs.output-folder }}
           temp-folder: ${{ inputs.temp-folder }}
+          # Auth credentials - action is self-contained (Issue #7)
+          environment-url: ${{ secrets.environment-url }}
+          tenant-id: ${{ secrets.tenant-id }}
+          client-id: ${{ secrets.client-id }}
+          client-secret: ${{ secrets.client-secret }}
 
       - name: Get exported version
         id: get-version

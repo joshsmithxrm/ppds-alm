@@ -1,15 +1,17 @@
 # =============================================================================
 # Composite Action: Export Solution
 # =============================================================================
-# Exports and unpacks a Power Platform solution from the authenticated environment.
+# Self-contained action that exports and unpacks a Power Platform solution.
 #
 # Exports BOTH managed and unmanaged solutions, then unpacks with --packagetype Both
 # to create a single source folder that can build either managed or unmanaged.
 #
 # See: https://learn.microsoft.com/en-us/power-platform/alm/solution-packager-tool
 #
-# Prerequisites:
-#   - Must authenticate first using pac-auth action
+# Auth Lifecycle:
+#   - Clears stale auth at start
+#   - Creates fresh auth for export
+#   - Clears auth when done (always)
 #
 # Usage:
 #   - name: Export solution
@@ -17,6 +19,10 @@
 #     with:
 #       solution-name: MySolution
 #       output-folder: solutions/MySolution/src
+#       environment-url: ${{ secrets.environment-url }}
+#       tenant-id: ${{ secrets.tenant-id }}
+#       client-id: ${{ secrets.client-id }}
+#       client-secret: ${{ secrets.client-secret }}
 #
 # =============================================================================
 # KNOWN ISSUE: PAC CLI --allowDelete Bug on Linux
@@ -52,6 +58,19 @@ inputs:
     description: 'Temporary folder for zip files (cleaned up after unpack)'
     required: false
     default: './exports'
+  # Auth credentials - action is self-contained and manages its own auth lifecycle
+  environment-url:
+    description: 'Power Platform environment URL'
+    required: true
+  tenant-id:
+    description: 'Azure AD tenant ID'
+    required: true
+  client-id:
+    description: 'Service principal client ID'
+    required: true
+  client-secret:
+    description: 'Service principal client secret'
+    required: true
 
 outputs:
   solution-folder:
@@ -61,6 +80,27 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Authenticate to environment
+      shell: bash
+      env:
+        ENVIRONMENT_URL: ${{ inputs.environment-url }}
+        TENANT_ID: ${{ inputs.tenant-id }}
+        CLIENT_ID: ${{ inputs.client-id }}
+        CLIENT_SECRET: ${{ inputs.client-secret }}
+      run: |
+        # Clear any stale auth profiles (follows Microsoft's pattern)
+        echo "Clearing stale auth profiles..."
+        pac auth clear 2>/dev/null || true
+
+        # Create fresh auth for export
+        echo "Authenticating to environment..."
+        pac auth create \
+          --name "export-auth" \
+          --environment "$ENVIRONMENT_URL" \
+          --tenant "$TENANT_ID" \
+          --applicationId "$CLIENT_ID" \
+          --clientSecret "$CLIENT_SECRET"
+
     - name: Setup paths
       id: paths
       shell: bash
@@ -149,3 +189,10 @@ runs:
         echo "Cleaning up temporary files..."
         rm -f "${{ inputs.temp-folder }}/${{ inputs.solution-name }}.zip"
         rm -f "${{ inputs.temp-folder }}/${{ inputs.solution-name }}_managed.zip"
+
+    - name: Clear auth profiles
+      if: always()
+      shell: bash
+      run: |
+        # Clean up auth profiles when done (follows Microsoft's pattern)
+        pac auth clear 2>/dev/null || true

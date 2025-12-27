@@ -3,8 +3,12 @@
 # =============================================================================
 # Authenticates to a Power Platform environment using service principal.
 #
+# IMPORTANT: This action clears auth when done (follows Microsoft's pattern).
+# Use this for one-off PAC CLI commands. For multi-step operations, use
+# self-contained actions like import-solution which manage their own auth.
+#
 # Usage:
-#   - name: Authenticate to environment
+#   - name: Authenticate and run command
 #     uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v1
 #     with:
 #       environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
@@ -53,6 +57,12 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Clear stale auth profiles
+      shell: bash
+      run: |
+        # Clear any existing auth profiles to start fresh (follows Microsoft's pattern)
+        pac auth clear 2>/dev/null || true
+
     - name: Create auth profile
       shell: bash
       run: |
@@ -86,3 +96,10 @@ runs:
 
         echo "environment-id=$ENV_ID" >> $GITHUB_OUTPUT
         echo "user-id=$USER_ID" >> $GITHUB_OUTPUT
+
+    - name: Clear auth profiles
+      if: always()
+      shell: bash
+      run: |
+        # Clean up auth profiles when done (follows Microsoft's pattern)
+        pac auth clear 2>/dev/null || true

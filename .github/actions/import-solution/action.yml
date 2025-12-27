@@ -1,15 +1,20 @@
 # =============================================================================
 # Composite Action: Import Solution
 # =============================================================================
-# Imports a Power Platform solution into the authenticated environment with
+# Self-contained action that imports a Power Platform solution with
 # enterprise-grade features:
+#   - Manages own auth lifecycle (follows Microsoft's pattern)
 #   - Version comparison (skip if target has same or newer version)
 #   - Smart retry logic for transient failures
 #   - Deployment settings file support
+#   - Fresh re-auth before publish (prevents token expiration)
 #   - Detailed import summary
 #
-# Prerequisites:
-#   - Must authenticate first using pac-auth action
+# Auth Lifecycle:
+#   - Clears stale auth at start
+#   - Creates fresh auth for import
+#   - Re-authenticates before publish (for long-running imports)
+#   - Clears auth when done (always)
 #
 # Usage:
 #   - name: Import solution
@@ -17,9 +22,10 @@
 #     with:
 #       solution-path: ./exports/MySolution_managed.zip
 #       solution-name: MySolution
-#       skip-if-same-version: 'true'
-#       max-retries: '3'
-#       settings-file: ./config/prod.deploymentsettings.json
+#       environment-url: ${{ secrets.environment-url }}
+#       tenant-id: ${{ secrets.tenant-id }}
+#       client-id: ${{ secrets.client-id }}
+#       client-secret: ${{ secrets.client-secret }}
 #
 # =============================================================================
 
@@ -70,24 +76,20 @@ inputs:
     description: 'Path to deployment settings JSON file'
     required: false
     default: ''
-  # Auth credentials for re-authentication before publish (fixes token expiration on long imports)
+  # Auth credentials - action is self-contained and manages its own auth lifecycle
   # See: https://github.com/joshsmithxrm/ppds-alm/issues/7
   environment-url:
-    description: 'Power Platform environment URL (required if publish-changes is true)'
-    required: false
-    default: ''
+    description: 'Power Platform environment URL'
+    required: true
   tenant-id:
-    description: 'Azure AD tenant ID (required if publish-changes is true)'
-    required: false
-    default: ''
+    description: 'Azure AD tenant ID'
+    required: true
   client-id:
-    description: 'Service principal client ID (required if publish-changes is true)'
-    required: false
-    default: ''
+    description: 'Service principal client ID'
+    required: true
   client-secret:
-    description: 'Service principal client secret (required if publish-changes is true)'
-    required: false
-    default: ''
+    description: 'Service principal client secret'
+    required: true
 
 outputs:
   imported:
@@ -109,6 +111,27 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Authenticate to environment
+      shell: bash
+      env:
+        ENVIRONMENT_URL: ${{ inputs.environment-url }}
+        TENANT_ID: ${{ inputs.tenant-id }}
+        CLIENT_ID: ${{ inputs.client-id }}
+        CLIENT_SECRET: ${{ inputs.client-secret }}
+      run: |
+        # Clear any stale auth profiles (follows Microsoft's pattern)
+        echo "Clearing stale auth profiles..."
+        pac auth clear 2>/dev/null || true
+
+        # Create fresh auth for import
+        echo "Authenticating to environment..."
+        pac auth create \
+          --name "import-auth" \
+          --environment "$ENVIRONMENT_URL" \
+          --tenant "$TENANT_ID" \
+          --applicationId "$CLIENT_ID" \
+          --clientSecret "$CLIENT_SECRET"
+
     - name: Extract solution version
       id: version-check
       shell: bash
