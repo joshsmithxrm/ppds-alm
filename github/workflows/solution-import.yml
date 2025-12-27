@@ -113,13 +113,7 @@ jobs:
       - name: Setup PAC CLI
         uses: ./.github/actions/setup-pac-cli
 
-      - name: Authenticate to environment
-        uses: ./.github/actions/pac-auth
-        with:
-          environment-url: ${{ secrets.environment-url }}
-          tenant-id: ${{ secrets.tenant-id }}
-          client-id: ${{ secrets.client-id }}
-          client-secret: ${{ secrets.client-secret }}
+      # Note: pac-auth step removed - import-solution is self-contained and manages its own auth lifecycle
 
       - name: Import solution
         id: import
@@ -131,3 +125,8 @@ jobs:
           max-retries: ${{ inputs.max-retries }}
           settings-file: ${{ inputs.settings-file }}
           publish-changes: ${{ inputs.publish-changes && 'true' || 'false' }}
+          # Auth credentials - action is self-contained (Issue #7)
+          environment-url: ${{ secrets.environment-url }}
+          tenant-id: ${{ secrets.tenant-id }}
+          client-id: ${{ secrets.client-id }}
+          client-secret: ${{ secrets.client-secret }}

@@ -268,14 +268,8 @@ jobs:
       - name: Setup PAC CLI
         uses: ./.github/actions/setup-pac-cli
 
-      - name: Authenticate to environment
-        if: secrets.environment-url != '' && secrets.client-id != ''
-        uses: ./.github/actions/pac-auth
-        with:
-          environment-url: ${{ secrets.environment-url }}
-          tenant-id: ${{ secrets.tenant-id }}
-          client-id: ${{ secrets.client-id }}
-          client-secret: ${{ secrets.client-secret }}
+      # Note: pac-auth removed - check-solution runs in anonymous mode
+      # (pac-auth now clears after itself, so auth wouldn't persist anyway)
 
       - name: Run Solution Checker on Managed
         id: check

@@ -1,10 +1,27 @@
 # =============================================================================
 # Composite Action: PAC Auth
 # =============================================================================
-# Authenticates to a Power Platform environment using service principal.
+# Authenticates to a Power Platform environment using service principal and
+# optionally runs a command while authenticated.
 #
-# Usage:
-#   - name: Authenticate to environment
+# IMPORTANT: This action clears auth when done (follows Microsoft's pattern).
+# Auth does NOT persist to subsequent steps - use the 'run' input to execute
+# commands while authenticated. For complex operations, use self-contained
+# actions like import-solution which manage their own auth lifecycle.
+#
+# Usage (run command while authenticated):
+#   - name: Set solution version
+#     uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v1
+#     with:
+#       environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+#       tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+#       client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+#       client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
+#       run: |
+#         pac solution online-version --solution-name MySolution --solution-version 1.0.0
+#
+# Usage (verify credentials only):
+#   - name: Verify credentials
 #     uses: joshsmithxrm/ppds-alm/.github/actions/pac-auth@v1
 #     with:
 #       environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
@@ -41,6 +58,10 @@ inputs:
     description: 'Auth profile name (for multiple connections)'
     required: false
     default: 'default'
+  run:
+    description: 'Script to execute while authenticated (optional). Auth is cleared after execution.'
+    required: false
+    default: ''
 
 outputs:
   environment-id:
@@ -53,6 +74,12 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Clear stale auth profiles
+      shell: bash
+      run: |
+        # Clear any existing auth profiles to start fresh (follows Microsoft's pattern)
+        pac auth clear 2>/dev/null || true
+
     - name: Create auth profile
       shell: bash
       run: |
@@ -86,3 +113,15 @@ runs:
 
         echo "environment-id=$ENV_ID" >> $GITHUB_OUTPUT
         echo "user-id=$USER_ID" >> $GITHUB_OUTPUT
+
+    - name: Execute command
+      if: inputs.run != ''
+      shell: bash
+      run: ${{ inputs.run }}
+
+    - name: Clear auth profiles
+      if: always()
+      shell: bash
+      run: |
+        # Clean up auth profiles when done (follows Microsoft's pattern)
+        pac auth clear 2>/dev/null || true

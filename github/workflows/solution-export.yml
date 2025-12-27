@@ -107,22 +107,22 @@ jobs:
       - name: Setup PAC CLI
         uses: ./.github/actions/setup-pac-cli
 
-      - name: Authenticate to environment
+      # Note: pac-auth step removed - export-solution is self-contained and manages its own auth lifecycle
+
+      - name: Set solution version
+        if: inputs.set-version != ''
         uses: ./.github/actions/pac-auth
         with:
           environment-url: ${{ secrets.environment-url }}
           tenant-id: ${{ secrets.tenant-id }}
           client-id: ${{ secrets.client-id }}
           client-secret: ${{ secrets.client-secret }}
-
-      - name: Set solution version
-        if: inputs.set-version != ''
-        run: |
-          echo "Setting solution version to ${{ inputs.set-version }}"
-          pac solution online-version \
-            --solution-name "${{ inputs.solution-name }}" \
-            --solution-version "${{ inputs.set-version }}"
-          echo "Version set successfully"
+          run: |
+            echo "Setting solution version to ${{ inputs.set-version }}"
+            pac solution online-version \
+              --solution-name "${{ inputs.solution-name }}" \
+              --solution-version "${{ inputs.set-version }}"
+            echo "Version set successfully"
 
       - name: Export solution
         uses: ./.github/actions/export-solution
@@ -130,6 +130,11 @@ jobs:
           solution-name: ${{ inputs.solution-name }}
           output-folder: ${{ inputs.output-folder }}
           temp-folder: ${{ inputs.temp-folder }}
+          # Auth credentials - action is self-contained (Issue #7)
+          environment-url: ${{ secrets.environment-url }}
+          tenant-id: ${{ secrets.tenant-id }}
+          client-id: ${{ secrets.client-id }}
+          client-secret: ${{ secrets.client-secret }}
 
       - name: Get exported version
         id: get-version
