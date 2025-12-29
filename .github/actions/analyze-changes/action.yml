@@ -133,7 +133,7 @@ runs:
 
             # Check if the only change is the Version tag
             # Remove diff headers and check remaining content
-            MEANINGFUL_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" | grep -v "<Version>" | grep -v "</Version>" || true)
+            MEANINGFUL_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -Ev "^[+-]{3}" | grep -v "<Version>" | grep -v "</Version>" || true)
 
             if [ -z "$MEANINGFUL_CHANGES" ]; then
               IS_NOISE=true
@@ -146,7 +146,7 @@ runs:
             DIFF_CONTENT=$(git diff --cached -- "$FILE" 2>/dev/null || echo "")
 
             # Check if changes are only in DocumentUri or BackgroundImageUri lines
-            NON_URI_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" | grep -Ev "(DocumentUri|BackgroundImageUri)" || true)
+            NON_URI_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -Ev "^[+-]{3}" | grep -Ev "(DocumentUri|BackgroundImageUri)" || true)
 
             if [ -z "$NON_URI_CHANGES" ]; then
               IS_NOISE=true
@@ -160,7 +160,7 @@ runs:
 
             # Check if only workflowName changed (session regeneration noise)
             # Real changes would affect workflowEntityId or other structural elements
-            STRUCTURAL_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" | grep -Ev "\"workflowName\"" || true)
+            STRUCTURAL_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -Ev "^[+-]{3}" | grep -Ev "\"workflowName\"" || true)
 
             if [ -z "$STRUCTURAL_CHANGES" ]; then
               IS_NOISE=true
@@ -173,10 +173,10 @@ runs:
             DIFF_CONTENT=$(git diff --cached --ignore-all-space --ignore-blank-lines -- "$FILE" 2>/dev/null || echo "")
 
             # If ignoring whitespace shows no changes, it's whitespace-only
-            if [ -z "$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" || true)" ]; then
+            if [ -z "$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -Ev "^[+-]{3}" || true)" ]; then
               # Double-check there ARE changes when not ignoring whitespace
               ACTUAL_DIFF=$(git diff --cached -- "$FILE" 2>/dev/null || echo "")
-              if [ -n "$(echo "$ACTUAL_DIFF" | grep -E "^[+-]" | grep -v "^[+-]{3}" || true)" ]; then
+              if [ -n "$(echo "$ACTUAL_DIFF" | grep -E "^[+-]" | grep -Ev "^[+-]{3}" || true)" ]; then
                 IS_NOISE=true
                 NOISE_REASON="Whitespace-only change"
               fi
@@ -189,7 +189,7 @@ runs:
             DIFF_CONTENT=$(git diff --cached -- "$FILE" 2>/dev/null || echo "")
 
             # Check if only schemaVersion changed (not MissingDependency - those are real changes)
-            OTHER_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -v "^[+-]{3}" | grep -Ev "(schemaVersion|<Version>)" || true)
+            OTHER_CHANGES=$(echo "$DIFF_CONTENT" | grep -E "^[+-]" | grep -Ev "^[+-]{3}" | grep -Ev "(schemaVersion|<Version>)" || true)
 
             if [ -z "$OTHER_CHANGES" ] && [ "$IS_NOISE" = false ]; then
               IS_NOISE=true
