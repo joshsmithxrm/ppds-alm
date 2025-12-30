@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Documentation** - Comprehensive guide for Azure integration modules (`docs/AZURE_INTEGRATION.md`)
 
+- **CAF Naming Conventions** - All Bicep modules follow [Microsoft Cloud Adoption Framework naming](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)
+  - Pattern: `{resource-type}-{workload}-{environment}-{instance}`
+  - Standard abbreviations: `app`, `func`, `sbns`, `appi`, `log`, `asp`, `st`
+  - New `instance` parameter for multi-deployment scenarios (default: `001`)
+
 ## [1.0.0] - 2025-12-26
 
 Initial release of ppds-alm - reusable GitHub Actions and workflows for Power Platform ALM.

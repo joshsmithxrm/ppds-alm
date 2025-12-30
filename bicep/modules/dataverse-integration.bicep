@@ -9,11 +9,14 @@
 //   - Function App (webhook/trigger handlers)
 //   - Service Bus (async messaging)
 //
+// Naming follows CAF conventions: {resource-type}-{workload}-{environment}-{instance}
+// Reference: https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations
+//
 // Usage:
 //   module integration 'dataverse-integration.bicep' = {
 //     name: 'dataverse-integration'
 //     params: {
-//       appNamePrefix: 'myapp'
+//       appNamePrefix: 'ppdsdemo'
 //       environment: 'dev'
 //       serviceBusQueues: [
 //         { name: 'account-updates' }
@@ -25,7 +28,7 @@
 targetScope = 'resourceGroup'
 
 // Required parameters
-@description('Application name prefix used for all resources')
+@description('Workload name used for all resources (e.g., ppdsdemo, contoso-crm)')
 param appNamePrefix string
 
 @description('Environment name (dev, qa, prod)')
@@ -35,6 +38,9 @@ param environment string
 // Optional parameters
 @description('Location for all resources')
 param location string = resourceGroup().location
+
+@description('Instance identifier for multi-deployment scenarios (e.g., 001, 002)')
+param instance string = '001'
 
 @description('App Service Plan SKU (defaults based on environment)')
 param appServicePlanSku string = ''
@@ -63,18 +69,19 @@ param functionAppSettings array = []
 param tags object = {}
 
 // Computed values
-var uniqueSuffix = uniqueString(resourceGroup().id)
 var effectiveAppServicePlanSku = appServicePlanSku != '' ? appServicePlanSku : (environment == 'prod' ? 'P1v3' : 'B1')
 var effectiveServiceBusSku = serviceBusSku != '' ? serviceBusSku : (environment == 'prod' ? 'Standard' : 'Basic')
 
-// Resource names
-var logAnalyticsName = '${appNamePrefix}-log-${environment}'
-var appInsightsName = '${appNamePrefix}-ai-${environment}'
-var storageAccountName = take(replace('${appNamePrefix}st${environment}${uniqueSuffix}', '-', ''), 24)
-var appServicePlanName = '${appNamePrefix}-plan-${environment}'
-var webAppName = '${appNamePrefix}-api-${environment}-${uniqueSuffix}'
-var functionAppName = '${appNamePrefix}-func-${environment}-${uniqueSuffix}'
-var serviceBusNamespaceName = '${appNamePrefix}-sb-${environment}-${uniqueSuffix}'
+// Resource names - CAF naming conventions
+// Pattern: {resource-type}-{workload}-{environment}-{instance}
+var workload = appNamePrefix
+var logAnalyticsName = 'log-${workload}-${environment}-${instance}'
+var appInsightsName = 'appi-${workload}-${environment}-${instance}'
+var storageAccountName = take('st${replace(workload, '-', '')}${environment}${instance}', 24)
+var appServicePlanName = 'asp-${workload}-${environment}-${instance}'
+var webAppName = 'app-${workload}-${environment}-${instance}'
+var functionAppName = 'func-${workload}-${environment}-${instance}'
+var serviceBusNamespaceName = 'sbns-${workload}-${environment}-${instance}'
 
 // Merged tags
 var allTags = union(tags, {

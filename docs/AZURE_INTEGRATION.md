@@ -14,6 +14,61 @@ These modules provide a standardized way to deploy Azure infrastructure for Data
 
 ---
 
+## Naming Conventions
+
+These modules follow the [Microsoft Cloud Adoption Framework (CAF) naming conventions](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations).
+
+### Pattern
+
+```
+{resource-type}-{workload}-{environment}-{instance}
+```
+
+### Abbreviations Used
+
+| Resource | Abbreviation | Example |
+|----------|--------------|---------|
+| Log Analytics | `log` | `log-ppdsdemo-dev-001` |
+| Application Insights | `appi` | `appi-ppdsdemo-dev-001` |
+| Storage Account | `st` | `stppdsdemodev001` |
+| App Service Plan | `asp` | `asp-ppdsdemo-dev-001` |
+| App Service | `app` | `app-ppdsdemo-dev-001` |
+| Function App | `func` | `func-ppdsdemo-dev-001` |
+| Service Bus Namespace | `sbns` | `sbns-ppdsdemo-dev-001` |
+
+### Global Uniqueness
+
+Azure requires globally unique names for some resources (Storage Account, App Service, Function App, Service Bus). To avoid naming conflicts:
+
+- Use an organization-specific `appNamePrefix` (e.g., `contoso-crm` not `myapp`)
+- If you encounter name conflicts, use a more specific prefix
+
+### Multi-Instance Deployments
+
+Use the `instance` parameter to deploy multiple stacks in the same environment:
+
+```bicep
+// First deployment (default)
+module integration1 'dataverse-integration.bicep' = {
+  params: {
+    appNamePrefix: 'ppdsdemo'
+    environment: 'dev'
+    instance: '001'  // default
+  }
+}
+
+// Second deployment
+module integration2 'dataverse-integration.bicep' = {
+  params: {
+    appNamePrefix: 'ppdsdemo'
+    environment: 'dev'
+    instance: '002'
+  }
+}
+```
+
+---
+
 ## Quick Start
 
 ### Using the Composite Module
@@ -284,9 +339,10 @@ Deploys a complete Azure infrastructure stack.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `appNamePrefix` | string | Yes | - | Resource name prefix |
+| `appNamePrefix` | string | Yes | - | Workload name (e.g., ppdsdemo) |
 | `environment` | string | Yes | - | Environment (dev, qa, prod) |
 | `location` | string | No | resourceGroup().location | Azure region |
+| `instance` | string | No | `001` | Instance identifier for multi-deployment |
 | `appServicePlanSku` | string | No | Based on env | App Service SKU |
 | `serviceBusSku` | string | No | Based on env | Service Bus SKU |
 | `serviceBusQueues` | array | No | `[]` | Queue configurations |
