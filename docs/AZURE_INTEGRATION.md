@@ -106,24 +106,9 @@ module integration2 'dataverse-integration.bicep' = {
 
 ## Quick Start
 
-### Using the Composite Module
+### Using the GitHub Workflow (Recommended)
 
-The easiest way to deploy is using the `dataverse-integration.bicep` composite module:
-
-```bicep
-module integration 'github.com/joshsmithxrm/ppds-alm/bicep/modules/dataverse-integration.bicep@v1' = {
-  name: 'dataverse-integration'
-  params: {
-    appNamePrefix: 'myapp'
-    environment: 'dev'
-    serviceBusQueues: [
-      { name: 'account-updates' }
-    ]
-  }
-}
-```
-
-### Using the GitHub Workflow
+The easiest way to deploy is using the reusable GitHub Actions workflow:
 
 ```yaml
 jobs:
@@ -137,6 +122,24 @@ jobs:
       azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
       azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       service-bus-queues: '[{"name": "account-updates"}]'
+```
+
+### Using the Composite Module Locally
+
+For local development or custom deployments, clone the repository and reference the module:
+
+```bicep
+// After cloning ppds-alm to ./ppds-alm
+module integration './ppds-alm/bicep/modules/dataverse-integration.bicep' = {
+  name: 'dataverse-integration'
+  params: {
+    appNamePrefix: 'myapp'
+    environment: 'dev'
+    serviceBusQueues: [
+      { name: 'account-updates' }
+    ]
+  }
+}
 ```
 
 ---

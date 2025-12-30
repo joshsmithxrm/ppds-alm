@@ -115,7 +115,7 @@ jobs:
         with:
           repository: joshsmithxrm/ppds-alm
           path: .ppds-alm
-          sparse-checkout: bicep
+          sparse-checkout: bicep/modules
 
       - name: Validate inputs
         shell: pwsh
@@ -168,45 +168,35 @@ jobs:
         id: deploy
         shell: pwsh
         run: |
-          $params = @{
-            appNamePrefix = '${{ inputs.app-name-prefix }}'
-            environment = '${{ inputs.environment }}'
-            location = '${{ inputs.location }}'
-          }
-
-          # Add service bus queues if provided
-          $queuesJson = '${{ inputs.service-bus-queues }}'
-          if ($queuesJson -and $queuesJson -ne '[]') {
-            $queues = $queuesJson | ConvertFrom-Json
-            if ($queues.Count -gt 0) {
-              $params.serviceBusQueues = $queues
-            }
-          }
-
-          # Build parameters argument
-          $paramsJson = $params | ConvertTo-Json -Compress -Depth 10
-
-          # Check for parameter file
-          $paramFileArg = ''
-          if ('${{ inputs.parameter-file }}' -and (Test-Path '${{ inputs.parameter-file }}')) {
-            $paramFileArg = '--parameters @${{ inputs.parameter-file }}'
-          }
-
           Write-Host "Deploying to resource group '${{ inputs.resource-group }}'..."
-          Write-Host "Parameters: $paramsJson"
+          Write-Host "  appNamePrefix: ${{ inputs.app-name-prefix }}"
+          Write-Host "  environment: ${{ inputs.environment }}"
+          Write-Host "  location: ${{ inputs.location }}"
+          Write-Host "  serviceBusQueues: ${{ inputs.service-bus-queues }}"
 
           $deploymentName = "ppds-alm-${{ inputs.environment }}-$(Get-Date -Format 'yyyyMMddHHmmss')"
 
-          $result = az deployment group create `
-            --resource-group '${{ inputs.resource-group }}' `
-            --name $deploymentName `
-            --template-file '${{ steps.bicep-path.outputs.bicep-file }}' `
-            --parameters appNamePrefix='${{ inputs.app-name-prefix }}' `
-            --parameters environment='${{ inputs.environment }}' `
-            --parameters location='${{ inputs.location }}' `
-            --parameters serviceBusQueues='${{ inputs.service-bus-queues }}' `
-            $paramFileArg `
-            --output json
+          # Build the deployment command
+          $deployArgs = @(
+            'deployment', 'group', 'create'
+            '--resource-group', '${{ inputs.resource-group }}'
+            '--name', $deploymentName
+            '--template-file', '${{ steps.bicep-path.outputs.bicep-file }}'
+            '--parameters', "appNamePrefix=${{ inputs.app-name-prefix }}"
+            '--parameters', "environment=${{ inputs.environment }}"
+            '--parameters', "location=${{ inputs.location }}"
+            '--parameters', "serviceBusQueues=${{ inputs.service-bus-queues }}"
+            '--output', 'json'
+          )
+
+          # Add parameter file if provided and exists
+          if ('${{ inputs.parameter-file }}' -and (Test-Path '${{ inputs.parameter-file }}')) {
+            Write-Host "  parameterFile: ${{ inputs.parameter-file }}"
+            $deployArgs += '--parameters'
+            $deployArgs += '@${{ inputs.parameter-file }}'
+          }
+
+          $result = az @deployArgs
 
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Deployment failed"

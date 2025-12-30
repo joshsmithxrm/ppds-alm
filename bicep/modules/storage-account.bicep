@@ -29,8 +29,8 @@ param sku string = 'Standard_LRS'
 @allowed(['StorageV2', 'Storage', 'BlobStorage'])
 param kind string = 'StorageV2'
 
-@description('Minimum TLS version')
-@allowed(['TLS1_0', 'TLS1_1', 'TLS1_2'])
+@description('Minimum TLS version (TLS 1.2 required for security compliance)')
+@allowed(['TLS1_2'])
 param minimumTlsVersion string = 'TLS1_2'
 
 @description('Allow public blob access')
