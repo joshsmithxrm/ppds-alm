@@ -131,13 +131,12 @@ jobs:
     uses: joshsmithxrm/ppds-alm/github/workflows/deploy-azure-integration.yml@v1
     with:
       environment: dev
-      resource-group: myapp-rg-dev
-      app-name-prefix: myapp
+      resource-group: rg-ppdsdemo-dev
+      app-name-prefix: ppdsdemo
+      azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+      azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       service-bus-queues: '[{"name": "account-updates"}]'
-    secrets:
-      azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-      azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-      azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 ```
 
 ---
@@ -428,14 +427,13 @@ Deploys a complete Azure infrastructure stack.
 | `bicep-file` | string | No | composite module | Custom Bicep file |
 | `parameter-file` | string | No | - | Bicep parameters file |
 | `service-bus-queues` | string | No | `[]` | JSON queue array |
+| `azure-client-id` | string | Yes | - | Azure AD client ID (not a secret) |
+| `azure-tenant-id` | string | Yes | - | Azure AD tenant ID (not a secret) |
+| `azure-subscription-id` | string | Yes | - | Azure subscription ID (not a secret) |
 
-**Secrets:**
-
-| Secret | Required | Description |
-|--------|----------|-------------|
-| `azure-client-id` | Yes | Azure AD client ID |
-| `azure-tenant-id` | Yes | Azure AD tenant ID |
-| `azure-subscription-id` | Yes | Azure subscription ID |
+> **Note:** `client-id`, `tenant-id`, and `subscription-id` are identifiers, not credentials.
+> They are passed as inputs (use `${{ vars.* }}`), not secrets. OIDC authentication
+> uses GitHub's token - no client secret is needed.
 
 **Outputs:**
 
@@ -456,7 +454,13 @@ The workflow uses Azure federated credentials (OIDC). Set up:
 1. Create an Azure AD App Registration
 2. Add federated credential for GitHub Actions
 3. Assign Contributor role to subscription/resource group
-4. Store credentials as GitHub secrets
+4. Store identifiers as GitHub **variables** (Settings → Secrets and variables → Actions → Variables):
+   - `AZURE_CLIENT_ID` - App registration client ID
+   - `AZURE_TENANT_ID` - Azure AD tenant ID
+   - `AZURE_SUBSCRIPTION_ID` - Target subscription ID
+
+> **Why variables, not secrets?** These are identifiers, not credentials. OIDC authentication
+> works by exchanging GitHub's OIDC token with Azure AD - no client secret is involved.
 
 See [AUTHENTICATION.md](AUTHENTICATION.md) for detailed setup instructions.
 
@@ -472,12 +476,11 @@ jobs:
     uses: joshsmithxrm/ppds-alm/github/workflows/deploy-azure-integration.yml@v1
     with:
       environment: dev
-      resource-group: myapp-rg-dev
-      app-name-prefix: myapp
-    secrets:
-      azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-      azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-      azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      resource-group: rg-ppdsdemo-dev
+      app-name-prefix: ppdsdemo
+      azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+      azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 ```
 
 ### With Service Bus Queues
@@ -488,14 +491,16 @@ jobs:
     uses: joshsmithxrm/ppds-alm/github/workflows/deploy-azure-integration.yml@v1
     with:
       environment: prod
-      resource-group: myapp-rg-prod
-      app-name-prefix: myapp
+      resource-group: rg-ppdsdemo-prod
+      app-name-prefix: ppdsdemo
+      azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+      azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       service-bus-queues: |
         [
           {"name": "account-updates", "maxDeliveryCount": 10},
           {"name": "notifications", "maxDeliveryCount": 5}
         ]
-    secrets: inherit
 ```
 
 ### Using Individual Modules

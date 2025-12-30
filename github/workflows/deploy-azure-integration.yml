@@ -7,6 +7,7 @@
 #   - Deploys Function App, Service Bus, App Service, and supporting resources
 #   - Uses reusable Bicep modules from ppds-alm
 #   - Supports dev/qa/prod environments with appropriate defaults
+#   - Uses Azure OIDC authentication (no secrets required)
 #
 # Usage:
 #   jobs:
@@ -14,12 +15,15 @@
 #       uses: joshsmithxrm/ppds-alm/github/workflows/deploy-azure-integration.yml@v1
 #       with:
 #         environment: dev
-#         resource-group: myapp-rg-dev
-#         app-name-prefix: myapp
-#       secrets:
-#         azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-#         azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-#         azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+#         resource-group: rg-ppdsdemo-dev
+#         app-name-prefix: ppdsdemo
+#         azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+#         azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+#         azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+#
+# Note: client-id, tenant-id, and subscription-id are NOT secrets.
+# They are identifiers, not credentials. OIDC authentication uses
+# GitHub's token to authenticate - no client secret needed.
 #
 # =============================================================================
 
@@ -60,17 +64,18 @@ on:
         required: false
         type: string
         default: '[]'
-
-    secrets:
       azure-client-id:
-        description: 'Azure AD application (client) ID'
+        description: 'Azure AD application (client) ID for OIDC authentication'
         required: true
+        type: string
       azure-tenant-id:
         description: 'Azure AD tenant ID'
         required: true
+        type: string
       azure-subscription-id:
         description: 'Azure subscription ID'
         required: true
+        type: string
 
     outputs:
       web-app-name:
@@ -132,9 +137,9 @@ jobs:
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.azure-client-id }}
-          tenant-id: ${{ secrets.azure-tenant-id }}
-          subscription-id: ${{ secrets.azure-subscription-id }}
+          client-id: ${{ inputs.azure-client-id }}
+          tenant-id: ${{ inputs.azure-tenant-id }}
+          subscription-id: ${{ inputs.azure-subscription-id }}
 
       - name: Ensure resource group exists
         shell: pwsh
