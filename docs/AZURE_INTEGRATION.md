@@ -465,7 +465,7 @@ The workflow uses Azure federated credentials (OIDC). Set up:
 > **Why variables, not secrets?** These are identifiers, not credentials. OIDC authentication
 > works by exchanging GitHub's OIDC token with Azure AD - no client secret is involved.
 
-See [AUTHENTICATION.md](AUTHENTICATION.md) for detailed setup instructions.
+See [AZURE_OIDC_SETUP.md](AZURE_OIDC_SETUP.md) for detailed setup instructions.
 
 ---
 
@@ -564,5 +564,5 @@ module serviceBus 'modules/service-bus.bicep' = {
 ## Related Documentation
 
 - [GITHUB_QUICKSTART.md](GITHUB_QUICKSTART.md) - GitHub Actions setup
-- [AUTHENTICATION.md](AUTHENTICATION.md) - Azure credential setup
+- [AZURE_OIDC_SETUP.md](AZURE_OIDC_SETUP.md) - Azure OIDC credential setup
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues

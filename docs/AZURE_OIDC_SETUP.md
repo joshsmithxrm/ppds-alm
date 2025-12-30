@@ -264,7 +264,7 @@ jobs:
 
 ### Passing to Reusable Workflows
 
-When calling reusable workflows that expect secrets:
+When calling reusable workflows, pass the OIDC identifiers via the `with` block:
 
 ```yaml
 jobs:
@@ -273,8 +273,8 @@ jobs:
     with:
       environment: dev
       resource-group: rg-myproject-dev
-    secrets:
-      # Variables can be passed to secrets inputs
+      app-name-prefix: myproject
+      # Pass identifiers as inputs, not secrets
       azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
       azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
       azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}

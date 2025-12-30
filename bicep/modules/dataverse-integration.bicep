@@ -77,7 +77,7 @@ var effectiveServiceBusSku = serviceBusSku != '' ? serviceBusSku : (environment 
 var workload = appNamePrefix
 var logAnalyticsName = 'log-${workload}-${environment}-${instance}'
 var appInsightsName = 'appi-${workload}-${environment}-${instance}'
-var storageAccountName = take('st${replace(workload, '-', '')}${environment}${instance}', 24)
+var storageAccountName = take(toLower('st${replace(workload, '-', '')}${environment}${instance}'), 24)
 var appServicePlanName = 'asp-${workload}-${environment}-${instance}'
 var webAppName = 'app-${workload}-${environment}-${instance}'
 var functionAppName = 'func-${workload}-${environment}-${instance}'

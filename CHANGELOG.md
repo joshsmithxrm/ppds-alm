@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Optional `region` component for multi-region deployments
   - New `instance` parameter for multi-deployment scenarios (default: `001`)
 
-- **Documentation** - Comprehensive guide for Azure integration modules (`docs/AZURE_INTEGRATION.md`)
+- **Documentation** - Comprehensive guides for Azure integration modules (`docs/AZURE_INTEGRATION.md`, `docs/AZURE_OIDC_SETUP.md`)
 
 ### Security
 

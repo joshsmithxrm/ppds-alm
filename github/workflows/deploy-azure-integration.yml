@@ -99,6 +99,10 @@ jobs:
     name: Deploy Azure Resources
     runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write
+      contents: read
+
     outputs:
       web-app-name: ${{ steps.deploy.outputs.webAppName }}
       web-app-url: ${{ steps.deploy.outputs.webAppUrl }}
