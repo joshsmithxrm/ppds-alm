@@ -312,7 +312,9 @@ Install-Module PPDS.Tools -MinimumVersion '1.1.0' -Force
 Maintain docs in `docs/` for consumers:
 - **GITHUB_QUICKSTART.md** - GitHub Actions setup
 - **AZURE_DEVOPS_QUICKSTART.md** - Azure DevOps setup
-- **AUTHENTICATION.md** - Credential setup guide
+- **AUTHENTICATION.md** - Power Platform credential setup
+- **AZURE_OIDC_SETUP.md** - Azure OIDC for GitHub Actions
+- **AZURE_INTEGRATION.md** - Bicep modules and naming
 - **ACTIONS_REFERENCE.md** - Detailed action documentation
 - **FEATURES.md** - Advanced features guide
 - **TROUBLESHOOTING.md** - Common issues

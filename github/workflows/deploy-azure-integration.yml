@@ -1,0 +1,235 @@
+# =============================================================================
+# Reusable Workflow: Deploy Azure Integration Resources
+# =============================================================================
+# Deploys Azure infrastructure for Dataverse integration using Bicep modules.
+#
+# Features:
+#   - Deploys Function App, Service Bus, App Service, and supporting resources
+#   - Uses reusable Bicep modules from ppds-alm
+#   - Supports dev/qa/prod environments with appropriate defaults
+#   - Uses Azure OIDC authentication (no secrets required)
+#
+# Usage:
+#   jobs:
+#     deploy:
+#       uses: joshsmithxrm/ppds-alm/github/workflows/deploy-azure-integration.yml@v1
+#       with:
+#         environment: dev
+#         resource-group: rg-ppdsdemo-dev
+#         app-name-prefix: ppdsdemo
+#         azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+#         azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+#         azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+#
+# Note: client-id, tenant-id, and subscription-id are NOT secrets.
+# They are identifiers, not credentials. OIDC authentication uses
+# GitHub's token to authenticate - no client secret needed.
+#
+# =============================================================================
+
+name: Deploy Azure Integration
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment name (dev, qa, prod)'
+        required: true
+        type: string
+      resource-group:
+        description: 'Azure resource group name'
+        required: true
+        type: string
+      app-name-prefix:
+        description: 'Application name prefix for resources'
+        required: true
+        type: string
+      location:
+        description: 'Azure region for resources'
+        required: false
+        type: string
+        default: 'eastus'
+      bicep-file:
+        description: 'Path to Bicep file (relative to repo root)'
+        required: false
+        type: string
+        default: ''
+      parameter-file:
+        description: 'Path to Bicep parameters file (optional)'
+        required: false
+        type: string
+        default: ''
+      service-bus-queues:
+        description: 'JSON array of queue configurations'
+        required: false
+        type: string
+        default: '[]'
+      azure-client-id:
+        description: 'Azure AD application (client) ID for OIDC authentication'
+        required: true
+        type: string
+      azure-tenant-id:
+        description: 'Azure AD tenant ID'
+        required: true
+        type: string
+      azure-subscription-id:
+        description: 'Azure subscription ID'
+        required: true
+        type: string
+
+    outputs:
+      web-app-name:
+        description: 'Deployed Web App name'
+        value: ${{ jobs.deploy.outputs.web-app-name }}
+      web-app-url:
+        description: 'Deployed Web App URL'
+        value: ${{ jobs.deploy.outputs.web-app-url }}
+      function-app-name:
+        description: 'Deployed Function App name'
+        value: ${{ jobs.deploy.outputs.function-app-name }}
+      function-app-url:
+        description: 'Deployed Function App URL'
+        value: ${{ jobs.deploy.outputs.function-app-url }}
+      service-bus-namespace:
+        description: 'Service Bus namespace name'
+        value: ${{ jobs.deploy.outputs.service-bus-namespace }}
+
+jobs:
+  deploy:
+    name: Deploy Azure Resources
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    outputs:
+      web-app-name: ${{ steps.deploy.outputs.webAppName }}
+      web-app-url: ${{ steps.deploy.outputs.webAppUrl }}
+      function-app-name: ${{ steps.deploy.outputs.functionAppName }}
+      function-app-url: ${{ steps.deploy.outputs.functionAppUrl }}
+      service-bus-namespace: ${{ steps.deploy.outputs.serviceBusNamespace }}
+
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v4
+
+      - name: Checkout ppds-alm for Bicep modules
+        uses: actions/checkout@v4
+        with:
+          repository: joshsmithxrm/ppds-alm
+          path: .ppds-alm
+          sparse-checkout: bicep/modules
+
+      - name: Validate inputs
+        shell: pwsh
+        run: |
+          $validEnvironments = @('dev', 'qa', 'prod')
+          if ('${{ inputs.environment }}' -notin $validEnvironments) {
+            Write-Error "Invalid environment '${{ inputs.environment }}'. Must be one of: $($validEnvironments -join ', ')"
+            exit 1
+          }
+          if (-not '${{ inputs.resource-group }}') {
+            Write-Error "resource-group is required"
+            exit 1
+          }
+          if (-not '${{ inputs.app-name-prefix }}') {
+            Write-Error "app-name-prefix is required"
+            exit 1
+          }
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.azure-client-id }}
+          tenant-id: ${{ inputs.azure-tenant-id }}
+          subscription-id: ${{ inputs.azure-subscription-id }}
+
+      - name: Ensure resource group exists
+        shell: pwsh
+        run: |
+          $rgExists = az group exists --name '${{ inputs.resource-group }}'
+          if ($rgExists -eq 'false') {
+            Write-Host "Creating resource group '${{ inputs.resource-group }}' in '${{ inputs.location }}'..."
+            az group create --name '${{ inputs.resource-group }}' --location '${{ inputs.location }}'
+          } else {
+            Write-Host "Resource group '${{ inputs.resource-group }}' already exists."
+          }
+
+      - name: Determine Bicep file
+        id: bicep-path
+        shell: pwsh
+        run: |
+          if ('${{ inputs.bicep-file }}') {
+            $bicepFile = '${{ inputs.bicep-file }}'
+          } else {
+            $bicepFile = '.ppds-alm/bicep/modules/dataverse-integration.bicep'
+          }
+          Write-Host "Using Bicep file: $bicepFile"
+          "bicep-file=$bicepFile" >> $env:GITHUB_OUTPUT
+
+      - name: Deploy Bicep template
+        id: deploy
+        shell: pwsh
+        run: |
+          Write-Host "Deploying to resource group '${{ inputs.resource-group }}'..."
+          Write-Host "  appNamePrefix: ${{ inputs.app-name-prefix }}"
+          Write-Host "  environment: ${{ inputs.environment }}"
+          Write-Host "  location: ${{ inputs.location }}"
+          Write-Host "  serviceBusQueues: ${{ inputs.service-bus-queues }}"
+
+          $deploymentName = "ppds-alm-${{ inputs.environment }}-$(Get-Date -Format 'yyyyMMddHHmmss')"
+
+          # Build the deployment command
+          $deployArgs = @(
+            'deployment', 'group', 'create'
+            '--resource-group', '${{ inputs.resource-group }}'
+            '--name', $deploymentName
+            '--template-file', '${{ steps.bicep-path.outputs.bicep-file }}'
+            '--parameters', "appNamePrefix=${{ inputs.app-name-prefix }}"
+            '--parameters', "environment=${{ inputs.environment }}"
+            '--parameters', "location=${{ inputs.location }}"
+            '--parameters', "serviceBusQueues=${{ inputs.service-bus-queues }}"
+            '--output', 'json'
+          )
+
+          # Add parameter file if provided and exists
+          if ('${{ inputs.parameter-file }}' -and (Test-Path '${{ inputs.parameter-file }}')) {
+            Write-Host "  parameterFile: ${{ inputs.parameter-file }}"
+            $deployArgs += '--parameters'
+            $deployArgs += '@${{ inputs.parameter-file }}'
+          }
+
+          $result = az @deployArgs
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Deployment failed"
+            exit 1
+          }
+
+          $deployment = $result | ConvertFrom-Json
+          $outputs = $deployment.properties.outputs
+
+          # Set outputs
+          "webAppName=$($outputs.webAppName.value)" >> $env:GITHUB_OUTPUT
+          "webAppUrl=$($outputs.webAppUrl.value)" >> $env:GITHUB_OUTPUT
+          "functionAppName=$($outputs.functionAppName.value)" >> $env:GITHUB_OUTPUT
+          "functionAppUrl=$($outputs.functionAppUrl.value)" >> $env:GITHUB_OUTPUT
+          "serviceBusNamespace=$($outputs.serviceBusNamespace.value)" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Deployment complete!"
+          Write-Host "Web App: $($outputs.webAppUrl.value)"
+          Write-Host "Function App: $($outputs.functionAppUrl.value)"
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          echo "## Azure Integration Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | \`${{ inputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource Group | \`${{ inputs.resource-group }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web App | [${{ steps.deploy.outputs.webAppName }}](${{ steps.deploy.outputs.webAppUrl }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Function App | [${{ steps.deploy.outputs.functionAppName }}](${{ steps.deploy.outputs.functionAppUrl }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Service Bus | \`${{ steps.deploy.outputs.serviceBusNamespace }}\` |" >> $GITHUB_STEP_SUMMARY
