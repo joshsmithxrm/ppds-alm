@@ -21,40 +21,55 @@ These modules follow the [Microsoft Cloud Adoption Framework (CAF) naming conven
 ### Pattern
 
 ```
-{resource-type}-{workload}-{environment}-{instance}
+{resource-type}-{workload}-{environment}-[{region}]-{instance}
 ```
 
-### Abbreviations Used
+| Component | Required | Description |
+|-----------|----------|-------------|
+| `resource-type` | Yes | CAF abbreviation (e.g., `app`, `func`, `rg`) |
+| `workload` | Yes | Application/project name (e.g., `ppdsdemo`) |
+| `environment` | Yes | Environment name (`dev`, `qa`, `prod`) |
+| `region` | No | Azure region - include for multi-region deployments |
+| `instance` | No | Instance number (`001`, `002`) - include for multiple instances |
 
-| Resource | Abbreviation | Example |
-|----------|--------------|---------|
-| Resource Group | `rg` | `rg-ppdsdemo-dev-eastus` |
-| Log Analytics | `log` | `log-ppdsdemo-dev-001` |
-| Application Insights | `appi` | `appi-ppdsdemo-dev-001` |
-| Storage Account | `st` | `stppdsdemodev001` |
-| App Service Plan | `asp` | `asp-ppdsdemo-dev-001` |
-| App Service | `app` | `app-ppdsdemo-dev-001` |
-| Function App | `func` | `func-ppdsdemo-dev-001` |
-| Service Bus Namespace | `sbns` | `sbns-ppdsdemo-dev-001` |
+### Single-Region vs Multi-Region
 
-### Resource Group Naming
+**Be consistent** - either include region in all resource names or none.
 
-Resource groups follow a slightly different pattern that includes region:
+#### Single-Region (Recommended for most projects)
 
-```
-rg-{workload}-{environment}-{region}-{instance}
-```
+Skip the region component when deploying to a single Azure region:
 
-The `instance` component is **optional** for resource groups since:
-- Resource group names are subscription-scoped (not globally unique)
-- You typically have one RG per workload/environment/region
+| Resource | Example |
+|----------|---------|
+| Resource Group | `rg-ppdsdemo-dev` |
+| App Service | `app-ppdsdemo-dev-001` |
+| Function App | `func-ppdsdemo-dev-001` |
+| Service Bus | `sbns-ppdsdemo-dev-001` |
 
-**Examples:**
+#### Multi-Region
 
-| Pattern | Example |
-|---------|---------|
-| Without instance (typical) | `rg-ppdsdemo-dev-eastus` |
-| With instance (multi-RG scenarios) | `rg-ppdsdemo-dev-eastus-001` |
+Include region when the same workload is deployed to multiple Azure regions:
+
+| Resource | East US | West US |
+|----------|---------|---------|
+| Resource Group | `rg-ppdsdemo-dev-eastus` | `rg-ppdsdemo-dev-westus` |
+| App Service | `app-ppdsdemo-dev-eastus-001` | `app-ppdsdemo-dev-westus-001` |
+| Function App | `func-ppdsdemo-dev-eastus-001` | `func-ppdsdemo-dev-westus-001` |
+| Service Bus | `sbns-ppdsdemo-dev-eastus-001` | `sbns-ppdsdemo-dev-westus-001` |
+
+### CAF Abbreviations
+
+| Resource | Abbreviation |
+|----------|--------------|
+| Resource Group | `rg` |
+| Log Analytics | `log` |
+| Application Insights | `appi` |
+| Storage Account | `st` |
+| App Service Plan | `asp` |
+| App Service | `app` |
+| Function App | `func` |
+| Service Bus Namespace | `sbns` |
 
 ### Global Uniqueness
 
