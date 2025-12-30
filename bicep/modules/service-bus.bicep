@@ -3,6 +3,10 @@
 // =============================================================================
 // Creates an Azure Service Bus namespace with optional queues.
 //
+// Security: This module creates a scoped authorization rule with Send and Listen
+// permissions only (principle of least privilege). The RootManageSharedAccessKey
+// is not exposed. If you need Manage permissions, retrieve them from Azure portal.
+//
 // Usage:
 //   module serviceBus 'service-bus.bicep' = {
 //     name: 'service-bus'
@@ -41,7 +45,7 @@ param queues array = []
 param tags object = {}
 
 // Service Bus Namespace
-resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview' = {
+resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2021-11-01' = {
   name: namespaceName
   location: location
   tags: tags
@@ -52,7 +56,7 @@ resource serviceBusNamespace 'Microsoft.ServiceBus/namespaces@2022-10-01-preview
 }
 
 // Service Bus Queues
-resource serviceBusQueues 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-preview' = [for queue in queues: {
+resource serviceBusQueues 'Microsoft.ServiceBus/namespaces/queues@2021-11-01' = [for queue in queues: {
   parent: serviceBusNamespace
   name: queue.name
   properties: {
@@ -62,6 +66,21 @@ resource serviceBusQueues 'Microsoft.ServiceBus/namespaces/queues@2022-10-01-pre
   }
 }]
 
+// Application access policy (least privilege - Send and Listen only)
+// This follows the principle of least privilege. Applications typically only need
+// to send and receive messages, not manage the namespace. If you need Manage
+// permissions, use RootManageSharedAccessKey from the Azure portal.
+resource appAccessPolicy 'Microsoft.ServiceBus/namespaces/authorizationRules@2021-11-01' = {
+  name: 'app-access'
+  parent: serviceBusNamespace
+  properties: {
+    rights: [
+      'Listen'
+      'Send'
+    ]
+  }
+}
+
 // Outputs
 @description('Resource ID of the Service Bus namespace')
 output id string = serviceBusNamespace.id
@@ -69,8 +88,8 @@ output id string = serviceBusNamespace.id
 @description('Name of the Service Bus namespace')
 output name string = serviceBusNamespace.name
 
-@description('Primary connection string')
-output connectionString string = listKeys('${serviceBusNamespace.id}/AuthorizationRules/RootManageSharedAccessKey', serviceBusNamespace.apiVersion).primaryConnectionString
+@description('Connection string with Send and Listen permissions (least privilege)')
+output connectionString string = listKeys(appAccessPolicy.id, serviceBusNamespace.apiVersion).primaryConnectionString
 
 @description('Endpoint URL of the Service Bus namespace')
 output endpoint string = serviceBusNamespace.properties.serviceBusEndpoint
