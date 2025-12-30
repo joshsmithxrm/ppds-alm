@@ -28,6 +28,7 @@ These modules follow the [Microsoft Cloud Adoption Framework (CAF) naming conven
 
 | Resource | Abbreviation | Example |
 |----------|--------------|---------|
+| Resource Group | `rg` | `rg-ppdsdemo-dev-eastus` |
 | Log Analytics | `log` | `log-ppdsdemo-dev-001` |
 | Application Insights | `appi` | `appi-ppdsdemo-dev-001` |
 | Storage Account | `st` | `stppdsdemodev001` |
@@ -35,6 +36,25 @@ These modules follow the [Microsoft Cloud Adoption Framework (CAF) naming conven
 | App Service | `app` | `app-ppdsdemo-dev-001` |
 | Function App | `func` | `func-ppdsdemo-dev-001` |
 | Service Bus Namespace | `sbns` | `sbns-ppdsdemo-dev-001` |
+
+### Resource Group Naming
+
+Resource groups follow a slightly different pattern that includes region:
+
+```
+rg-{workload}-{environment}-{region}-{instance}
+```
+
+The `instance` component is **optional** for resource groups since:
+- Resource group names are subscription-scoped (not globally unique)
+- You typically have one RG per workload/environment/region
+
+**Examples:**
+
+| Pattern | Example |
+|---------|---------|
+| Without instance (typical) | `rg-ppdsdemo-dev-eastus` |
+| With instance (multi-RG scenarios) | `rg-ppdsdemo-dev-eastus-001` |
 
 ### Global Uniqueness
 
