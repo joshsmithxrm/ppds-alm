@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Azure Integration Bicep Modules** - Reusable infrastructure-as-code for Dataverse → Azure integrations
+  - `log-analytics.bicep` - Log Analytics Workspace
+  - `application-insights.bicep` - Application Insights with Log Analytics integration
+  - `storage-account.bicep` - Storage Account for Function Apps
+  - `app-service-plan.bicep` - Shared hosting plan
+  - `app-service.bicep` - App Service for Web API hosting
+  - `function-app.bicep` - Azure Function App with managed identity
+  - `service-bus.bicep` - Service Bus namespace with queue creation
+  - `dataverse-integration.bicep` - Composite module wiring all resources together
+
+- **`deploy-azure-integration.yml`** - Reusable workflow for deploying Azure integration resources
+  - Supports dev/qa/prod environments with appropriate defaults
+  - Uses Azure OIDC authentication (federated credentials)
+  - Configurable Service Bus queues via JSON input
+  - Outputs resource URLs and names for downstream jobs
+
+- **Documentation** - Comprehensive guide for Azure integration modules (`docs/AZURE_INTEGRATION.md`)
+
 ## [1.0.0] - 2025-12-26
 
 Initial release of ppds-alm - reusable GitHub Actions and workflows for Power Platform ALM.

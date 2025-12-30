@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appNamePrefix": {
+      "value": "myapp"
+    },
+    "environment": {
+      "value": "prod"
+    },
+    "appServicePlanSku": {
+      "value": "P1v3"
+    },
+    "serviceBusSku": {
+      "value": "Standard"
+    },
+    "serviceBusQueues": {
+      "value": [
+        {
+          "name": "account-updates",
+          "maxDeliveryCount": 10,
+          "lockDuration": "PT5M",
+          "defaultMessageTimeToLive": "P14D"
+        },
+        {
+          "name": "notifications",
+          "maxDeliveryCount": 5
+        }
+      ]
+    },
+    "tags": {
+      "value": {
+        "costCenter": "production",
+        "owner": "platform-team"
+      }
+    }
+  }
+}
