@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2025-12-30
+
 ### Added
 
 - **Azure Integration Bicep Modules** - Reusable infrastructure-as-code for Dataverse → Azure integrations
@@ -16,21 +18,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `app-service-plan.bicep` - Shared hosting plan
   - `app-service.bicep` - App Service for Web API hosting
   - `function-app.bicep` - Azure Function App with managed identity
-  - `service-bus.bicep` - Service Bus namespace with queue creation
+  - `service-bus.bicep` - Service Bus namespace with queue creation (least privilege auth)
   - `dataverse-integration.bicep` - Composite module wiring all resources together
 
 - **`deploy-azure-integration.yml`** - Reusable workflow for deploying Azure integration resources
   - Supports dev/qa/prod environments with appropriate defaults
-  - Uses Azure OIDC authentication (federated credentials)
+  - Uses Azure OIDC authentication (no client secret needed)
   - Configurable Service Bus queues via JSON input
   - Outputs resource URLs and names for downstream jobs
 
+- **CAF Naming Conventions** - All Bicep modules follow [Microsoft Cloud Adoption Framework naming](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)
+  - Pattern: `{resource-type}-{workload}-{environment}-[{region}]-{instance}`
+  - Standard abbreviations: `app`, `func`, `sbns`, `appi`, `log`, `asp`, `st`, `rg`
+  - Optional `region` component for multi-region deployments
+  - New `instance` parameter for multi-deployment scenarios (default: `001`)
+
 - **Documentation** - Comprehensive guide for Azure integration modules (`docs/AZURE_INTEGRATION.md`)
 
-- **CAF Naming Conventions** - All Bicep modules follow [Microsoft Cloud Adoption Framework naming](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)
-  - Pattern: `{resource-type}-{workload}-{environment}-{instance}`
-  - Standard abbreviations: `app`, `func`, `sbns`, `appi`, `log`, `asp`, `st`
-  - New `instance` parameter for multi-deployment scenarios (default: `001`)
+### Security
+
+- **Service Bus** - Uses scoped `app-access` authorization rule with `Send` and `Listen` permissions only (principle of least privilege). `RootManageSharedAccessKey` is not exposed.
+- **OIDC Authentication** - Workflow uses `vars.*` for client-id, tenant-id, and subscription-id (identifiers, not secrets). No client secret required.
+- **Managed Identity** - All compute resources (App Service, Function App) have system-assigned managed identity enabled by default.
 
 ## [1.0.0] - 2025-12-26
 
@@ -85,5 +94,6 @@ Ten self-contained actions for Power Platform CI/CD:
 - .NET SDK 8.x (installed automatically)
 - Optional: [PPDS.Tools](https://github.com/joshsmithxrm/ppds-tools) for advanced plugin operations
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/joshsmithxrm/ppds-alm/releases/tag/v1.0.0
