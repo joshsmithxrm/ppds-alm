@@ -129,7 +129,7 @@ If not using environments:
 jobs:
   deploy:
     environment: QA  # Uses QA environment secrets
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -139,33 +139,6 @@ jobs:
       client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
       client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
 ```
-
-### Azure DevOps
-
-#### Service Connection (Recommended)
-
-1. Go to **Project Settings** > **Service connections**
-2. Click **New service connection**
-3. Select **Power Platform**
-4. Fill in:
-   - Server URL: Environment URL
-   - Tenant ID: Azure AD tenant ID
-   - Application ID: App registration client ID
-   - Client Secret: App registration secret
-5. Name it descriptively: `Dataverse-QA`
-6. Click **Save**
-
-#### Variable Groups
-
-For custom scripts:
-
-1. Go to **Pipelines** > **Library**
-2. Create variable groups: `PowerPlatform-Dev`, `PowerPlatform-QA`, `PowerPlatform-Prod`
-3. Add variables (mark secrets appropriately):
-   - `EnvironmentUrl`
-   - `TenantId`
-   - `ClientId`
-   - `ClientSecret` (secret)
 
 ## Security Best Practices
 
@@ -189,7 +162,7 @@ For production, create a custom security role with only:
 ### Secret Rotation
 
 1. Create new secret before old one expires
-2. Update GitHub/Azure DevOps secrets
+2. Update GitHub secrets
 3. Verify pipelines still work
 4. Delete old secret
 
@@ -297,7 +270,6 @@ Example deployment settings:
 
 ## See Also
 
-- [GitHub Actions Quickstart](./github-quickstart.md)
-- [Azure DevOps Quickstart](./azure-devops-quickstart.md)
-- [Troubleshooting](./troubleshooting.md)
+- [GitHub Actions Quickstart](./GITHUB_QUICKSTART.md)
+- [Troubleshooting](./TROUBLESHOOTING.md)
 - [Microsoft Authentication Documentation](https://learn.microsoft.com/en-us/power-platform/alm/devops-build-tools#configure-service-connections)

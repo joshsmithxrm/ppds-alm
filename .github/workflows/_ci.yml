@@ -18,7 +18,7 @@ jobs:
       - name: Validate GitHub workflow files
         run: |
           echo "Validating GitHub workflow files..."
-          for file in github/workflows/*.yml; do
+          for file in .github/workflows/*.yml; do
             echo "Checking $file"
             # Basic YAML validation using python
             python3 -c "import yaml; yaml.safe_load(open('$file'))" || exit 1

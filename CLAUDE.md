@@ -38,10 +38,10 @@
 
 | Technology | Purpose |
 |------------|---------|
-| GitHub Actions | Reusable workflows |
-| Azure DevOps | Pipeline templates |
+| GitHub Actions | Reusable workflows and composite actions |
 | YAML | Template definitions |
-| PowerShell | Runtime (via PPDS.Tools) |
+| Bash | Runtime scripts |
+| PowerShell | Cross-platform scripts (pwsh) |
 
 ---
 
@@ -50,32 +50,31 @@
 ```
 ppds-alm/
 ├── .github/
-│   └── workflows/
-│       └── ci.yml                    # Self-validation
-├── github/
-│   └── workflows/                    # Reusable workflows for CONSUMERS
-│       ├── plugin-deploy.yml
-│       ├── plugin-extract.yml
+│   ├── actions/                      # Composite actions for CONSUMERS
+│   │   ├── setup-pac-cli/
+│   │   ├── pac-auth/
+│   │   ├── export-solution/
+│   │   ├── import-solution/
+│   │   └── ...
+│   └── workflows/                    # All workflows
+│       ├── _ci.yml                   # Internal (self-validation)
+│       ├── solution-deploy.yml       # Reusable workflows for CONSUMERS
 │       ├── solution-export.yml
 │       ├── solution-import.yml
-│       └── full-alm.yml
-├── azure-devops/
-│   ├── templates/                    # Templates for CONSUMERS
-│   │   ├── plugin-deploy.yml
-│   │   ├── plugin-extract.yml
-│   │   ├── solution-export.yml
-│   │   ├── solution-import.yml
-│   │   └── full-alm.yml
-│   └── examples/
-│       ├── starter-pipeline.yml
-│       └── advanced-pipeline.yml
+│       ├── solution-build.yml
+│       ├── solution-validate.yml
+│       ├── plugin-deploy.yml
+│       ├── plugin-extract.yml
+│       ├── solution-promote.yml
+│       └── azure-deploy.yml
+├── bicep/                            # Azure Bicep modules
 ├── docs/
 │   ├── GITHUB_QUICKSTART.md
-│   ├── AZURE_DEVOPS_QUICKSTART.md
 │   ├── AUTHENTICATION.md
 │   ├── ACTIONS_REFERENCE.md
 │   ├── FEATURES.md
-│   ├── MIGRATION_V2.md
+│   ├── AZURE_INTEGRATION.md
+│   ├── AZURE_OIDC_SETUP.md
 │   ├── TROUBLESHOOTING.md
 │   └── strategy/
 └── CHANGELOG.md
@@ -87,10 +86,10 @@ ppds-alm/
 
 ```bash
 # Lint GitHub Actions workflows
-actionlint github/workflows/*.yml
+actionlint .github/workflows/*.yml
 
 # Validate YAML syntax
-yamllint github/workflows/*.yml azure-devops/templates/*.yml
+yamllint .github/workflows/*.yml
 ```
 
 ---
@@ -103,7 +102,8 @@ yamllint github/workflows/*.yml azure-devops/templates/*.yml
 | `plugin-deploy.yml` | Deploy plugins with drift detection |
 | `solution-export.yml` | Export solution from environment |
 | `solution-import.yml` | Import solution to environment |
-| `full-alm.yml` | Complete build-deploy pipeline |
+| `solution-promote.yml` | Promote solution between environments |
+| `azure-deploy.yml` | Deploy Azure integration resources |
 
 ---
 
@@ -149,21 +149,26 @@ on:
   run: pac auth create --url ${{ inputs.environment-url }}
 ```
 
-### Consistent PowerShell Usage
+### Consistent Shell Usage
 
 ```yaml
-# ✅ Correct - Use pwsh for PowerShell 7+
+# ✅ Correct - Use bash for cross-platform scripts
 - name: Deploy
+  shell: bash
+  run: |
+    ppds plugin deploy --registration-file "$REG_FILE" ...
+
+# ✅ Also correct - Use pwsh when PowerShell is needed
+- name: Setup
   shell: pwsh
   run: |
-    Import-Module PPDS.Tools
-    # ...
+    # PowerShell-specific logic
 
-# ❌ Wrong - Uses Windows PowerShell 5.1
+# ❌ Wrong - Uses Windows PowerShell 5.1 (not cross-platform)
 - name: Deploy
   shell: powershell
   run: |
-    Import-Module PPDS.Tools
+    # This only works on Windows
 ```
 
 ---
@@ -178,28 +183,12 @@ jobs:
   deploy:
     uses: joshsmithxrm/ppds-alm/.github/workflows/plugin-deploy.yml@v1.0.0
     with:
-      environment-url: 'https://myorg.crm.dynamics.com'
+      registration-file: ./registrations.json
     secrets:
+      environment-url: ${{ secrets.ENVIRONMENT_URL }}
       client-id: ${{ secrets.CLIENT_ID }}
       client-secret: ${{ secrets.CLIENT_SECRET }}
       tenant-id: ${{ secrets.TENANT_ID }}
-```
-
-### Azure DevOps
-
-```yaml
-# Consumer usage
-resources:
-  repositories:
-    - repository: ppds-alm
-      type: github
-      name: joshsmithxrm/ppds-alm
-      ref: refs/tags/v1.0.0
-
-stages:
-  - template: azure-devops/templates/plugin-deploy.yml@ppds-alm
-    parameters:
-      environmentUrl: 'https://myorg.crm.dynamics.com'
 ```
 
 ---
@@ -268,13 +257,14 @@ CI/CD templates cannot be unit tested - they must be run in actual CI/CD environ
 | Output | Distribution |
 |--------|--------------|
 | GitHub Actions workflows | Git tags |
-| Azure DevOps templates | Git tags |
+| Composite actions | Git tags |
+| Azure Bicep modules | Git tags |
 
 ### Dependencies
 
 | Dependency | Minimum | Used By |
 |------------|---------|---------|
-| PPDS.Tools | 1.1.0 | `plugin-deploy.yml`, `plugin-extract.yml` |
+| PPDS.Cli | latest | `plugin-deploy.yml`, `plugin-extract.yml` |
 | PAC CLI | latest | `solution-*.yml` workflows |
 
 ### Consumed By
@@ -288,7 +278,7 @@ CI/CD templates cannot be unit tested - they must be run in actual CI/CD environ
 
 | Rule | Details |
 |------|---------|
-| Major versions | Sync with ppds-tools when using new cmdlet features |
+| Major versions | Sync with ppds-sdk when using new CLI features |
 | Minor/patch | Independent |
 | Pre-release format | `-beta.N` suffix in git tag; do NOT update `v1` alias for pre-releases |
 
@@ -296,13 +286,13 @@ CI/CD templates cannot be unit tested - they must be run in actual CI/CD environ
 
 - Changing required workflow inputs
 - Changing secret names
-- Updating to new PPDS.Tools major version
+- Updating to new PPDS.Cli major version
 
 ### Pinning Dependencies
 
 ```yaml
-# In plugin workflows, pin to minimum compatible Tools version:
-Install-Module PPDS.Tools -MinimumVersion '1.1.0' -Force
+# In plugin workflows, pin to a specific CLI version:
+dotnet tool install --global PPDS.Cli --version "1.0.0"
 ```
 
 ---
@@ -311,12 +301,14 @@ Install-Module PPDS.Tools -MinimumVersion '1.1.0' -Force
 
 Maintain docs in `docs/` for consumers:
 - **GITHUB_QUICKSTART.md** - GitHub Actions setup
-- **AZURE_DEVOPS_QUICKSTART.md** - Azure DevOps setup
 - **AUTHENTICATION.md** - Power Platform credential setup
-- **AZURE_OIDC_SETUP.md** - Azure OIDC for GitHub Actions
-- **AZURE_INTEGRATION.md** - Bicep modules and naming
-- **ACTIONS_REFERENCE.md** - Detailed action documentation
+- **WORKFLOWS_REFERENCE.md** - All workflows documented
+- **ACTIONS_REFERENCE.md** - All actions documented
+- **CONSUMPTION_GUIDE.md** - Actions vs workflows guidance
 - **FEATURES.md** - Advanced features guide
+- **AZURE_INTEGRATION.md** - Bicep modules and naming
+- **AZURE_OIDC_SETUP.md** - Azure OIDC for GitHub Actions
+- **AZURE_COORDINATION.md** - Azure and Dataverse coordination
 - **TROUBLESHOOTING.md** - Common issues
 
 ---
@@ -325,8 +317,9 @@ Maintain docs in `docs/` for consumers:
 
 | File | Purpose |
 |------|---------|
-| `github/workflows/*.yml` | GitHub reusable workflows |
-| `azure-devops/templates/*.yml` | ADO pipeline templates |
+| `.github/workflows/*.yml` | GitHub reusable workflows |
+| `.github/actions/*/action.yml` | Composite actions |
+| `bicep/modules/*.bicep` | Azure Bicep modules |
 | `docs/` | Consumer documentation |
 | `CHANGELOG.md` | Release notes |
 

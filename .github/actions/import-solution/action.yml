@@ -76,6 +76,28 @@ inputs:
     description: 'Path to deployment settings JSON file'
     required: false
     default: ''
+  # Upgrade options
+  import-as-holding:
+    description: 'Import as holding solution (for staged upgrades)'
+    required: false
+    default: 'false'
+  stage-and-upgrade:
+    description: 'Import and upgrade in one step (removes deleted components)'
+    required: false
+    default: 'false'
+  # Additional PAC CLI options
+  skip-dependency-check:
+    description: 'Skip dependency check against dependencies flagged as product update'
+    required: false
+    default: 'false'
+  activate-plugins:
+    description: 'Activate plugins and workflows after import'
+    required: false
+    default: 'false'
+  max-async-wait-time:
+    description: 'Maximum async wait time in minutes (default: 60)'
+    required: false
+    default: '60'
   # Auth credentials - action is self-contained and manages its own auth lifecycle
   # See: https://github.com/joshsmithxrm/ppds-alm/issues/7
   environment-url:
@@ -232,6 +254,11 @@ runs:
         MAX_RETRIES: ${{ inputs.max-retries }}
         RETRY_DELAY: ${{ inputs.retry-delay-seconds }}
         SETTINGS_FILE: ${{ inputs.settings-file }}
+        IMPORT_AS_HOLDING: ${{ inputs.import-as-holding }}
+        STAGE_AND_UPGRADE: ${{ inputs.stage-and-upgrade }}
+        SKIP_DEPENDENCY_CHECK: ${{ inputs.skip-dependency-check }}
+        ACTIVATE_PLUGINS: ${{ inputs.activate-plugins }}
+        MAX_ASYNC_WAIT_TIME: ${{ inputs.max-async-wait-time }}
       run: |
         set -euo pipefail
 
@@ -255,6 +282,26 @@ runs:
 
           if [ -n "$SETTINGS_FILE" ] && [ -f "$SETTINGS_FILE" ]; then
             cmd="$cmd --settings-file \"$SETTINGS_FILE\""
+          fi
+
+          # Upgrade options (mutually exclusive - stage-and-upgrade takes precedence)
+          if [ "$STAGE_AND_UPGRADE" = "true" ]; then
+            cmd="$cmd --stage-and-upgrade"
+          elif [ "$IMPORT_AS_HOLDING" = "true" ]; then
+            cmd="$cmd --import-as-holding"
+          fi
+
+          # Additional PAC CLI options
+          if [ "$SKIP_DEPENDENCY_CHECK" = "true" ]; then
+            cmd="$cmd --skip-dependency-check"
+          fi
+
+          if [ "$ACTIVATE_PLUGINS" = "true" ]; then
+            cmd="$cmd --activate-plugins"
+          fi
+
+          if [ "$ASYNC" = "true" ] && [ -n "$MAX_ASYNC_WAIT_TIME" ]; then
+            cmd="$cmd --max-async-wait-time $MAX_ASYNC_WAIT_TIME"
           fi
 
           echo "$cmd"

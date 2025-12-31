@@ -17,7 +17,7 @@ on:
 
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -30,37 +30,19 @@ jobs:
       client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
 ```
 
-### Azure DevOps
-
-```yaml
-resources:
-  repositories:
-    - repository: ppds-alm
-      type: github
-      name: joshsmithxrm/ppds-alm
-      ref: refs/tags/v1.0.0
-      endpoint: 'GitHub Connection'
-
-stages:
-  - template: azure-devops/templates/solution-deploy.yml@ppds-alm
-    parameters:
-      solutionName: MySolution
-      solutionFolder: solutions/MySolution/src
-      serviceConnection: 'Dataverse QA'
-```
-
 ## Reusable Workflows
 
 | Workflow | Purpose |
 |----------|---------|
-| [`solution-export.yml`](./github/workflows/solution-export.yml) | Export solution from environment with noise filtering |
-| [`solution-import.yml`](./github/workflows/solution-import.yml) | Import solution with version check and retry logic |
-| [`solution-build.yml`](./github/workflows/solution-build.yml) | Build .NET code and pack solution |
-| [`solution-validate.yml`](./github/workflows/solution-validate.yml) | PR validation with build, pack, and Solution Checker |
-| [`solution-deploy.yml`](./github/workflows/solution-deploy.yml) | Full deployment: build, pack, import |
-| [`plugin-deploy.yml`](./github/workflows/plugin-deploy.yml) | Deploy plugins using PPDS.Tools |
-| [`plugin-extract.yml`](./github/workflows/plugin-extract.yml) | Extract plugin registrations from assembly |
-| [`full-alm.yml`](./github/workflows/full-alm.yml) | Complete ALM pipeline (export, build, deploy) |
+| [`solution-export.yml`](./.github/workflows/solution-export.yml) | Export solution from environment with noise filtering |
+| [`solution-import.yml`](./.github/workflows/solution-import.yml) | Import solution with version check and retry logic |
+| [`solution-build.yml`](./.github/workflows/solution-build.yml) | Build .NET code and pack solution |
+| [`solution-validate.yml`](./.github/workflows/solution-validate.yml) | PR validation with build, pack, and Solution Checker |
+| [`solution-deploy.yml`](./.github/workflows/solution-deploy.yml) | Full deployment: build, pack, import |
+| [`plugin-deploy.yml`](./.github/workflows/plugin-deploy.yml) | Deploy plugins using PPDS.Cli |
+| [`plugin-extract.yml`](./.github/workflows/plugin-extract.yml) | Extract plugin registrations from assembly |
+| [`solution-promote.yml`](./.github/workflows/solution-promote.yml) | Promote solution between environments (export, build, deploy) |
+| [`azure-deploy.yml`](./.github/workflows/azure-deploy.yml) | Deploy Azure integration resources |
 
 ## Composite Actions
 
@@ -126,13 +108,19 @@ Validate solution quality before deployment:
 
 ### Getting Started
 - [GitHub Actions Quickstart](./docs/GITHUB_QUICKSTART.md)
-- [Azure DevOps Quickstart](./docs/AZURE_DEVOPS_QUICKSTART.md)
 - [Authentication Setup](./docs/AUTHENTICATION.md)
 
 ### Reference
-- [Actions Reference](./docs/ACTIONS_REFERENCE.md) - Detailed input/output docs for all actions
+- [Workflows Reference](./docs/WORKFLOWS_REFERENCE.md) - All reusable workflows documented
+- [Actions Reference](./docs/ACTIONS_REFERENCE.md) - All composite actions documented
+- [Consumption Guide](./docs/CONSUMPTION_GUIDE.md) - When to use actions vs workflows
 - [Features Guide](./docs/FEATURES.md) - Deep dive into advanced features
 - [Troubleshooting](./docs/TROUBLESHOOTING.md)
+
+### Azure Integration
+- [Azure Integration](./docs/AZURE_INTEGRATION.md) - Bicep modules and naming
+- [Azure OIDC Setup](./docs/AZURE_OIDC_SETUP.md) - GitHub Actions authentication
+- [Azure Coordination](./docs/AZURE_COORDINATION.md) - Coordinating Azure and Dataverse deployments
 
 ### Strategy Guides
 - [ALM Overview](./docs/strategy/ALM_OVERVIEW.md) - Philosophy and approach
@@ -155,41 +143,28 @@ ppds-alm/
 │   │   ├── analyze-changes/
 │   │   ├── copy-plugin-assemblies/
 │   │   └── copy-plugin-packages/
-│   └── workflows/
-│       └── ci.yml                  # CI for this repo
-├── github/
-│   └── workflows/                  # Reusable workflows (workflow_call)
-│       ├── solution-export.yml
+│   └── workflows/                  # All workflows
+│       ├── _ci.yml                 # CI for this repo (internal)
+│       ├── solution-export.yml     # Reusable workflows (workflow_call)
 │       ├── solution-import.yml
 │       ├── solution-build.yml
 │       ├── solution-validate.yml
 │       ├── solution-deploy.yml
 │       ├── plugin-deploy.yml
 │       ├── plugin-extract.yml
-│       └── full-alm.yml
-├── azure-devops/
-│   ├── templates/                  # Pipeline templates
-│   └── examples/                   # Example pipelines
+│       ├── solution-promote.yml
+│       └── azure-deploy.yml
+├── bicep/                          # Azure Bicep modules
 ├── docs/
-│   ├── github-quickstart.md
-│   ├── azure-devops-quickstart.md
-│   ├── authentication.md
-│   ├── actions-reference.md
-│   ├── features.md
-│   ├── troubleshooting.md
-│   └── strategy/
-│       ├── ALM_OVERVIEW.md
-│       ├── BRANCHING_STRATEGY.md
-│       └── ENVIRONMENT_STRATEGY.md
 ├── CHANGELOG.md
 └── README.md
 ```
 
 ## Compatibility
 
-| ALM Version | Requires PPDS.Tools |
-|-------------|---------------------|
-| v1.0.x | >= 1.1.0 |
+| ALM Version | Dependencies |
+|-------------|--------------|
+| v1.0.x | PPDS.Cli (for plugins), PAC CLI (for solutions) |
 
 ## Versioning
 

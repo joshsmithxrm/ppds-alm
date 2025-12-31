@@ -246,12 +246,9 @@ with:
 
 **Solution:**
 1. Verify the repository path: `joshsmithxrm/ppds-alm`
-2. Check the workflow path (note: no `.github` prefix for reusable workflows):
+2. Check the workflow path uses the standard `.github/workflows/` prefix:
    ```yaml
    # Correct
-   uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
-
-   # Wrong
    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
    ```
 3. Ensure you're using a valid ref (`@v1`, `@main`, etc.)
