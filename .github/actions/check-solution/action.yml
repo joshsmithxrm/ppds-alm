@@ -1,21 +1,27 @@
 # =============================================================================
 # Composite Action: Check Solution
 # =============================================================================
-# Runs the PowerApps Solution Checker to validate solution quality and
-# identify potential issues before deployment.
+# Self-contained action that runs the PowerApps Solution Checker to validate
+# solution quality and identify potential issues before deployment.
 #
-# Note: This action runs in anonymous mode (no authentication required).
-# The Solution Checker service validates the solution zip file using
-# Microsoft's standard rules.
+# Auth Lifecycle:
+#   - Clears stale auth at start
+#   - Creates fresh auth for checker
+#   - Clears auth when done (always)
 #
 # Prerequisites:
 #   - Solution must be packed as a zip file
+#   - PAC CLI must be installed (use setup-pac-cli action first)
 #
 # Usage:
 #   - name: Check solution quality
 #     uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v1
 #     with:
 #       solution-path: ./exports/MySolution_managed.zip
+#       environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+#       tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+#       client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+#       client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
 #       fail-on-level: High
 #       geography: unitedstates
 #
@@ -55,6 +61,19 @@ inputs:
     description: 'Path to rule level override file (optional)'
     required: false
     default: ''
+  # Auth credentials - action is self-contained and manages its own auth lifecycle
+  environment-url:
+    description: 'Power Platform environment URL'
+    required: true
+  tenant-id:
+    description: 'Azure AD tenant ID'
+    required: true
+  client-id:
+    description: 'Service principal client ID'
+    required: true
+  client-secret:
+    description: 'Service principal client secret'
+    required: true
 
 outputs:
   passed:
@@ -85,6 +104,27 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Authenticate to environment
+      shell: bash
+      env:
+        ENVIRONMENT_URL: ${{ inputs.environment-url }}
+        TENANT_ID: ${{ inputs.tenant-id }}
+        CLIENT_ID: ${{ inputs.client-id }}
+        CLIENT_SECRET: ${{ inputs.client-secret }}
+      run: |
+        # Clear any stale auth profiles (follows Microsoft's pattern)
+        echo "Clearing stale auth profiles..."
+        pac auth clear 2>/dev/null || true
+
+        # Create fresh auth for solution checker
+        echo "Authenticating to environment..."
+        pac auth create \
+          --name "check-solution-auth" \
+          --environment "$ENVIRONMENT_URL" \
+          --tenant "$TENANT_ID" \
+          --applicationId "$CLIENT_ID" \
+          --clientSecret "$CLIENT_SECRET"
+
     - name: Create output directory
       shell: bash
       run: mkdir -p "${{ inputs.output-directory }}"
@@ -312,3 +352,10 @@ runs:
       run: |
         echo "::error::Solution Checker found issues exceeding the ${{ inputs.fail-on-level }} threshold"
         exit 1
+
+    - name: Clear auth profiles
+      if: always()
+      shell: bash
+      run: |
+        # Clean up auth profiles to prevent stale credential issues (follows Microsoft's pattern)
+        pac auth clear 2>/dev/null || true
