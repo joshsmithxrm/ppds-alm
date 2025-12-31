@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2025-12-31
+
+### Fixed
+
+- **`check-solution` action** - Fixed "No profiles were found" error by adding self-contained authentication ([#13](https://github.com/joshsmithxrm/ppds-alm/issues/13))
+  - Added required inputs: `environment-url`, `tenant-id`, `client-id`, `client-secret`
+  - Action now manages its own auth lifecycle (clear → create → work → clear)
+  - Added input validation for empty strings with clear error messages
+  - Updated documentation in ACTIONS_REFERENCE.md and FEATURES.md
+
 ## [1.1.0] - 2025-12-30
 
 ### Added
@@ -57,7 +67,7 @@ Ten self-contained actions for Power Platform CI/CD:
 | `import-solution` | Import solution with version check, retry logic, and fresh auth before publish |
 | `pack-solution` | Pack solution from unpacked source files |
 | `build-solution` | Build .NET solution with optional test execution |
-| `check-solution` | Run Solution Checker with configurable severity thresholds (anonymous mode) |
+| `check-solution` | Run Solution Checker with configurable severity thresholds |
 | `analyze-changes` | Filter noise from solution exports (version stamps, session IDs, etc.) |
 | `copy-plugin-assemblies` | Copy classic plugin DLLs to solution folder |
 | `copy-plugin-packages` | Copy plugin packages (.nupkg) to solution folder |
@@ -94,6 +104,7 @@ Ten self-contained actions for Power Platform CI/CD:
 - .NET SDK 8.x (installed automatically)
 - Optional: [PPDS.Tools](https://github.com/joshsmithxrm/ppds-tools) for advanced plugin operations
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/joshsmithxrm/ppds-alm/releases/tag/v1.0.0

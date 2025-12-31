@@ -179,6 +179,8 @@ PowerApps Solution Checker validates solution quality by analyzing for:
 - Deprecated APIs
 - Best practice violations
 
+> **Note:** The `check-solution` action requires authentication. You must provide `environment-url`, `tenant-id`, `client-id`, and `client-secret` inputs. See [ACTIONS_REFERENCE.md](ACTIONS_REFERENCE.md#check-solution) for full usage.
+
 ### Severity Levels
 
 | Level | Description | Typical Action |
