@@ -142,7 +142,7 @@ For Azure-dependent values, generate at deploy time:
 - name: Generate settings
   run: |
     # Merge static settings with dynamic Azure URLs
-    jq --arg url "${{ needs.azure.outputs.function-url }}" \
+    jq --arg url "${{ needs.azure.outputs.function-app-url }}" \
       '.EnvironmentVariables += [{"SchemaName": "new_Url", "Value": $url}]' \
       config/MySolution.static.json > config/MySolution.prod.deploymentsettings.json
 ```
@@ -165,7 +165,7 @@ Use static settings with placeholders, replace at deploy time:
 ```yaml
 - name: Replace placeholders
   run: |
-    sed -i "s|{{AZURE_FUNCTION_URL}}|${{ needs.azure.outputs.function-url }}|g" \
+    sed -i "s|{{AZURE_FUNCTION_URL}}|${{ needs.azure.outputs.function-app-url }}|g" \
       config/MySolution.prod.deploymentsettings.json
 ```
 
@@ -279,12 +279,13 @@ output appInsightsConnectionString string = appInsights.properties.ConnectionStr
 ```
 
 ```yaml
-# Pass to solution settings
+# Pass to solution settings (requires exposing appInsightsConnectionString from Bicep)
 - name: Generate settings
   run: |
-    jq --arg conn "${{ needs.azure.outputs.app-insights-connection }}" \
+    # Note: You'll need to add this output to azure-deploy.yml if needed
+    jq --arg conn "$APP_INSIGHTS_CONNECTION" \
       '.EnvironmentVariables += [{"SchemaName": "new_AppInsightsConnection", "Value": $conn}]' \
-      ...
+      config/MySolution.static.json > config/MySolution.prod.deploymentsettings.json
 ```
 
 ### Plugin Logging to Azure

@@ -39,7 +39,7 @@ jobs:
 | [`solution-build.yml`](./.github/workflows/solution-build.yml) | Build .NET code and pack solution |
 | [`solution-validate.yml`](./.github/workflows/solution-validate.yml) | PR validation with build, pack, and Solution Checker |
 | [`solution-deploy.yml`](./.github/workflows/solution-deploy.yml) | Full deployment: build, pack, import |
-| [`plugin-deploy.yml`](./.github/workflows/plugin-deploy.yml) | Deploy plugins using PPDS CLI |
+| [`plugin-deploy.yml`](./.github/workflows/plugin-deploy.yml) | Deploy plugins using PPDS.Cli |
 | [`plugin-extract.yml`](./.github/workflows/plugin-extract.yml) | Extract plugin registrations from assembly |
 | [`solution-promote.yml`](./.github/workflows/solution-promote.yml) | Promote solution between environments (export, build, deploy) |
 | [`azure-deploy.yml`](./.github/workflows/azure-deploy.yml) | Deploy Azure integration resources |

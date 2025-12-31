@@ -106,6 +106,8 @@ jobs:
 | `import-version` | Version that was imported |
 | `target-version` | Version in target before import |
 
+> **Advanced Options:** For solution upgrade scenarios (`--stage-and-upgrade`, `--import-as-holding`) and additional PAC CLI options (`--skip-dependency-check`, `--activate-plugins`, `--max-async-wait-time`), use the [`import-solution` action](./ACTIONS_REFERENCE.md) directly in your own workflow.
+
 ---
 
 ### solution-build.yml
@@ -310,7 +312,7 @@ jobs:
 
 ### plugin-extract.yml
 
-Extracts plugin registrations from a compiled assembly using PPDS CLI.
+Extracts plugin registrations from a compiled assembly using PPDS.Cli.
 
 **Usage:**
 
@@ -328,7 +330,7 @@ jobs:
 |-------|----------|---------|-------------|
 | `assembly-path` | Yes | - | Path to compiled plugin assembly |
 | `output-path` | No | `./registrations.json` | Output registrations file |
-| `ppds-cli-version` | No | Latest | PPDS CLI version to install |
+| `ppds-cli-version` | No | Latest | PPDS.Cli version to install |
 
 **Outputs:**
 
@@ -340,7 +342,7 @@ jobs:
 
 ### plugin-deploy.yml
 
-Deploys plugins to a Dataverse environment using PPDS CLI with drift detection.
+Deploys plugins to a Dataverse environment using PPDS.Cli with drift detection.
 
 **Usage:**
 
@@ -363,7 +365,7 @@ jobs:
 |-------|----------|---------|-------------|
 | `registration-file` | No | `./registrations.json` | Plugin registrations file |
 | `detect-drift` | No | `true` | Run drift detection first |
-| `ppds-cli-version` | No | Latest | PPDS CLI version to install |
+| `ppds-cli-version` | No | Latest | PPDS.Cli version to install |
 
 **Outputs:**
 
@@ -371,6 +373,8 @@ jobs:
 |--------|-------------|
 | `deployed` | Whether plugins were deployed |
 | `drift-detected` | Whether drift was detected |
+
+> **Production Tip:** For production pipelines, consider pinning the PPDS.Cli version using the `ppds-cli-version` input to ensure consistent, reproducible deployments and reduce supply chain risk.
 
 ---
 

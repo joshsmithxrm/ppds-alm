@@ -269,7 +269,7 @@ When calling reusable workflows, pass the OIDC identifiers via the `with` block:
 ```yaml
 jobs:
   deploy-infrastructure:
-    uses: org/alm-repo/.github/workflows/deploy-azure-integration.yml@v1
+    uses: org/alm-repo/.github/workflows/azure-deploy.yml@v1
     with:
       environment: dev
       resource-group: rg-myproject-dev

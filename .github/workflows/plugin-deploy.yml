@@ -1,11 +1,11 @@
 # =============================================================================
 # Reusable Workflow: Deploy Plugins
 # =============================================================================
-# Deploys plugins to a Dataverse environment using PPDS CLI.
+# Deploys plugins to a Dataverse environment using PPDS.Cli.
 #
 # Features:
 #   - Drift detection (identifies changes between source and target)
-#   - Uses PPDS CLI for cross-platform deployment
+#   - Uses PPDS.Cli for cross-platform deployment
 #
 # Usage:
 #   jobs:
@@ -37,7 +37,7 @@ on:
         type: boolean
         default: true
       ppds-cli-version:
-        description: 'PPDS CLI version to install (default: latest)'
+        description: 'PPDS.Cli version to install (default: latest)'
         required: false
         type: string
         default: ''
@@ -82,12 +82,12 @@ jobs:
         with:
           dotnet-version: '8.x'
 
-      - name: Install PPDS CLI
+      - name: Install PPDS.Cli
         shell: bash
         env:
           CLI_VERSION: ${{ inputs.ppds-cli-version }}
         run: |
-          echo "Installing PPDS CLI..."
+          echo "Installing PPDS.Cli..."
           if [ -n "$CLI_VERSION" ]; then
             dotnet tool install --global PPDS.Cli --version "$CLI_VERSION"
           else
