@@ -340,7 +340,7 @@ Copies built plugin packages (.nupkg) to the solution's pluginpackages folder.
 
 ### check-solution
 
-Runs the PowerApps Solution Checker to validate solution quality.
+Runs the PowerApps Solution Checker to validate solution quality. This action is self-contained and manages its own authentication lifecycle.
 
 **Usage:**
 ```yaml
@@ -349,6 +349,10 @@ Runs the PowerApps Solution Checker to validate solution quality.
   uses: joshsmithxrm/ppds-alm/.github/actions/check-solution@v1
   with:
     solution-path: ./exports/MySolution_managed.zip
+    environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+    tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+    client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+    client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
     fail-on-level: High
     geography: unitedstates
 
@@ -364,6 +368,10 @@ Runs the PowerApps Solution Checker to validate solution quality.
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `solution-path` | Yes | - | Path to solution zip file |
+| `environment-url` | Yes | - | Power Platform environment URL |
+| `tenant-id` | Yes | - | Azure AD tenant ID |
+| `client-id` | Yes | - | Service principal client ID |
+| `client-secret` | Yes | - | Service principal client secret |
 | `fail-on-level` | No | `High` | Fail threshold (see below) |
 | `geography` | No | `unitedstates` | Solution Checker geography |
 | `output-directory` | No | `./checker-results` | Directory for checker output |

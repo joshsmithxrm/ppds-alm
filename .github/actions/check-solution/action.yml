@@ -104,6 +104,19 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        ENVIRONMENT_URL: ${{ inputs.environment-url }}
+        TENANT_ID: ${{ inputs.tenant-id }}
+        CLIENT_ID: ${{ inputs.client-id }}
+        CLIENT_SECRET: ${{ inputs.client-secret }}
+      run: |
+        if [ -z "$ENVIRONMENT_URL" ] || [ -z "$TENANT_ID" ] || [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
+          echo "::error::'environment-url', 'tenant-id', 'client-id', and 'client-secret' inputs are required and cannot be empty."
+          exit 1
+        fi
+
     - name: Authenticate to environment
       shell: bash
       env:
