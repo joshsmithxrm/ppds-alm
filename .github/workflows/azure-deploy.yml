@@ -1,5 +1,5 @@
 # =============================================================================
-# Reusable Workflow: Deploy Azure Integration Resources
+# Reusable Workflow: Azure Deploy
 # =============================================================================
 # Deploys Azure infrastructure for Dataverse integration using Bicep modules.
 #
@@ -12,7 +12,7 @@
 # Usage:
 #   jobs:
 #     deploy:
-#       uses: joshsmithxrm/ppds-alm/github/workflows/deploy-azure-integration.yml@v1
+#       uses: joshsmithxrm/ppds-alm/.github/workflows/azure-deploy.yml@v1
 #       with:
 #         environment: dev
 #         resource-group: rg-ppdsdemo-dev
@@ -27,7 +27,7 @@
 #
 # =============================================================================
 
-name: Deploy Azure Integration
+name: Azure Deploy
 
 on:
   workflow_call:

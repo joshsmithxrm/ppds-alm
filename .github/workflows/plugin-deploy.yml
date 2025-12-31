@@ -1,0 +1,187 @@
+# =============================================================================
+# Reusable Workflow: Deploy Plugins
+# =============================================================================
+# Deploys plugins to a Dataverse environment using PPDS CLI.
+#
+# Features:
+#   - Drift detection (identifies changes between source and target)
+#   - Uses PPDS CLI for cross-platform deployment
+#
+# Usage:
+#   jobs:
+#     deploy:
+#       uses: joshsmithxrm/ppds-alm/.github/workflows/plugin-deploy.yml@v1
+#       with:
+#         registration-file: ./registrations.json
+#       secrets:
+#         environment-url: ${{ vars.POWERPLATFORM_ENVIRONMENT_URL }}
+#         tenant-id: ${{ vars.POWERPLATFORM_TENANT_ID }}
+#         client-id: ${{ vars.POWERPLATFORM_CLIENT_ID }}
+#         client-secret: ${{ secrets.POWERPLATFORM_CLIENT_SECRET }}
+#
+# =============================================================================
+
+name: Deploy Plugins
+
+on:
+  workflow_call:
+    inputs:
+      registration-file:
+        description: 'Path to plugin registrations JSON file'
+        required: false
+        type: string
+        default: './registrations.json'
+      detect-drift:
+        description: 'Run drift detection before deployment'
+        required: false
+        type: boolean
+        default: true
+      ppds-cli-version:
+        description: 'PPDS CLI version to install (default: latest)'
+        required: false
+        type: string
+        default: ''
+
+    secrets:
+      environment-url:
+        description: 'Power Platform environment URL'
+        required: true
+      tenant-id:
+        description: 'Azure AD tenant ID'
+        required: true
+      client-id:
+        description: 'Service principal client ID'
+        required: true
+      client-secret:
+        description: 'Service principal client secret'
+        required: true
+
+    outputs:
+      deployed:
+        description: 'Whether plugins were deployed'
+        value: ${{ jobs.deploy.outputs.deployed }}
+      drift-detected:
+        description: 'Whether drift was detected'
+        value: ${{ jobs.deploy.outputs.drift-detected }}
+
+jobs:
+  deploy:
+    name: Deploy Plugins
+    runs-on: ubuntu-latest
+
+    outputs:
+      deployed: ${{ steps.deploy.outputs.deployed }}
+      drift-detected: ${{ steps.drift.outputs.detected }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Install PPDS CLI
+        shell: bash
+        env:
+          CLI_VERSION: ${{ inputs.ppds-cli-version }}
+        run: |
+          echo "Installing PPDS CLI..."
+          if [ -n "$CLI_VERSION" ]; then
+            dotnet tool install --global PPDS.Cli --version "$CLI_VERSION"
+          else
+            dotnet tool install --global PPDS.Cli
+          fi
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Verify installation
+        shell: bash
+        run: |
+          ppds --version
+
+      - name: Clear existing auth
+        shell: bash
+        run: |
+          echo "Clearing any existing auth profiles..."
+          ppds auth clear 2>/dev/null || true
+
+      - name: Detect drift
+        id: drift
+        if: inputs.detect-drift
+        shell: bash
+        env:
+          DATAVERSE_URL: ${{ secrets.environment-url }}
+          CLIENT_ID: ${{ secrets.client-id }}
+          CLIENT_SECRET: ${{ secrets.client-secret }}
+          TENANT_ID: ${{ secrets.tenant-id }}
+          REGISTRATION_FILE: ${{ inputs.registration-file }}
+        run: |
+          echo "Detecting plugin drift..."
+
+          # Run drift detection
+          set +e
+          DRIFT_OUTPUT=$(ppds plugin drift \
+            --registration-file "$REGISTRATION_FILE" \
+            --environment-url "$DATAVERSE_URL" \
+            --tenant-id "$TENANT_ID" \
+            --client-id "$CLIENT_ID" \
+            --client-secret "$CLIENT_SECRET" \
+            --output json 2>&1)
+          DRIFT_EXIT_CODE=$?
+          set -e
+
+          if [ $DRIFT_EXIT_CODE -eq 0 ]; then
+            if echo "$DRIFT_OUTPUT" | grep -q '"hasDrift":true'; then
+              echo "::warning::Plugin drift detected. Review changes below:"
+              echo "$DRIFT_OUTPUT" | jq '.' 2>/dev/null || echo "$DRIFT_OUTPUT"
+              echo "detected=true" >> $GITHUB_OUTPUT
+            else
+              echo "No drift detected."
+              echo "detected=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "::warning::Drift detection failed, proceeding with deployment"
+            echo "$DRIFT_OUTPUT"
+            echo "detected=unknown" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy plugins
+        id: deploy
+        shell: bash
+        env:
+          DATAVERSE_URL: ${{ secrets.environment-url }}
+          CLIENT_ID: ${{ secrets.client-id }}
+          CLIENT_SECRET: ${{ secrets.client-secret }}
+          TENANT_ID: ${{ secrets.tenant-id }}
+          REGISTRATION_FILE: ${{ inputs.registration-file }}
+        run: |
+          echo "Deploying plugins from $REGISTRATION_FILE..."
+
+          ppds plugin deploy \
+            --registration-file "$REGISTRATION_FILE" \
+            --environment-url "$DATAVERSE_URL" \
+            --tenant-id "$TENANT_ID" \
+            --client-id "$CLIENT_ID" \
+            --client-secret "$CLIENT_SECRET"
+
+          echo "Plugin deployment complete."
+          echo "deployed=true" >> $GITHUB_OUTPUT
+
+      - name: Clear auth
+        if: always()
+        shell: bash
+        run: |
+          echo "Clearing auth profiles..."
+          ppds auth clear 2>/dev/null || true
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          echo "## Plugin Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Registration File | \`${{ inputs.registration-file }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Drift Detected | ${{ steps.drift.outputs.detected || 'Not checked' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployed | ${{ steps.deploy.outputs.deployed }} |" >> $GITHUB_STEP_SUMMARY

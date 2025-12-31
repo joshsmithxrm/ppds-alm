@@ -7,7 +7,7 @@ This document describes the Application Lifecycle Management (ALM) philosophy an
 A practical, enterprise-ready ALM implementation for Power Platform that:
 
 - Uses **source control as the source of truth** (Git/GitHub)
-- Implements **CI/CD with PAC CLI** (portable to Azure DevOps)
+- Implements **CI/CD with PAC CLI** via GitHub Actions
 - Supports **develop/main branching** for controlled releases
 - Deploys **managed solutions** to non-development environments
 - Provides **modular, extensible pipelines** for multi-solution scenarios
@@ -88,7 +88,7 @@ Deployments are automated through CI/CD pipelines. Manual solution imports are a
 We use PAC CLI instead of Power Platform's built-in Pipelines because:
 
 - **Source control integration** - Pipelines don't commit to Git
-- **Portability** - PAC CLI works in GitHub Actions and Azure DevOps
+- **Portability** - PAC CLI is cross-platform and works in any CI/CD system
 - **Extensibility** - Custom validation, multi-solution orchestration
 - **Transparency** - Full visibility into deployment process
 
@@ -137,7 +137,7 @@ on:
 
 jobs:
   export:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-export.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-export.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -157,7 +157,7 @@ on:
 
 jobs:
   validate:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-validate.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-validate.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -178,7 +178,7 @@ on:
 
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src

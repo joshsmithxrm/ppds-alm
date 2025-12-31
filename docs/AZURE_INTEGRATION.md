@@ -113,7 +113,7 @@ The easiest way to deploy is using the reusable GitHub Actions workflow:
 ```yaml
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/deploy-azure-integration.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/azure-deploy.yml@v1
     with:
       environment: dev
       resource-group: rg-ppdsdemo-dev
@@ -417,7 +417,7 @@ Deploys a complete Azure infrastructure stack.
 
 ## Workflow Reference
 
-### deploy-azure-integration.yml
+### azure-deploy.yml
 
 **Inputs:**
 
@@ -476,7 +476,7 @@ See [AZURE_OIDC_SETUP.md](AZURE_OIDC_SETUP.md) for detailed setup instructions.
 ```yaml
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/deploy-azure-integration.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/azure-deploy.yml@v1
     with:
       environment: dev
       resource-group: rg-ppdsdemo-dev
@@ -491,7 +491,7 @@ jobs:
 ```yaml
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/deploy-azure-integration.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/azure-deploy.yml@v1
     with:
       environment: prod
       resource-group: rg-ppdsdemo-prod

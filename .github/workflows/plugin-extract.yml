@@ -1,0 +1,106 @@
+# =============================================================================
+# Reusable Workflow: Extract Plugin Registrations
+# =============================================================================
+# Extracts plugin registrations from a compiled assembly using PPDS CLI.
+#
+# Usage:
+#   jobs:
+#     extract:
+#       uses: joshsmithxrm/ppds-alm/.github/workflows/plugin-extract.yml@v1
+#       with:
+#         assembly-path: ./src/Plugins/bin/Release/net462/MyPlugins.dll
+#
+# =============================================================================
+
+name: Extract Plugin Registrations
+
+on:
+  workflow_call:
+    inputs:
+      assembly-path:
+        description: 'Path to the compiled plugin assembly (.dll)'
+        required: true
+        type: string
+      output-path:
+        description: 'Path for the output registrations JSON file'
+        required: false
+        type: string
+        default: './registrations.json'
+      ppds-cli-version:
+        description: 'PPDS CLI version to install (default: latest)'
+        required: false
+        type: string
+        default: ''
+
+    outputs:
+      registration-file:
+        description: 'Path to the generated registrations file'
+        value: ${{ jobs.extract.outputs.registration-file }}
+
+jobs:
+  extract:
+    name: Extract Registrations
+    runs-on: ubuntu-latest
+
+    outputs:
+      registration-file: ${{ steps.extract.outputs.file }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Install PPDS CLI
+        shell: bash
+        env:
+          CLI_VERSION: ${{ inputs.ppds-cli-version }}
+        run: |
+          echo "Installing PPDS CLI..."
+          if [ -n "$CLI_VERSION" ]; then
+            dotnet tool install --global PPDS.Cli --version "$CLI_VERSION"
+          else
+            dotnet tool install --global PPDS.Cli
+          fi
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Verify installation
+        shell: bash
+        run: |
+          ppds --version
+
+      - name: Extract plugin registrations
+        id: extract
+        shell: bash
+        env:
+          ASSEMBLY_PATH: ${{ inputs.assembly-path }}
+          OUTPUT_PATH: ${{ inputs.output-path }}
+        run: |
+          echo "Extracting plugin registrations from $ASSEMBLY_PATH..."
+
+          ppds plugin extract \
+            --assembly-path "$ASSEMBLY_PATH" \
+            --output "$OUTPUT_PATH"
+
+          echo "Registrations extracted to $OUTPUT_PATH"
+          echo "file=$OUTPUT_PATH" >> $GITHUB_OUTPUT
+
+      - name: Upload registrations artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-registrations
+          path: ${{ inputs.output-path }}
+          retention-days: 7
+
+      - name: Extraction summary
+        shell: bash
+        run: |
+          echo "## Plugin Extraction Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Assembly | \`${{ inputs.assembly-path }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Output | \`${{ inputs.output-path }}\` |" >> $GITHUB_STEP_SUMMARY

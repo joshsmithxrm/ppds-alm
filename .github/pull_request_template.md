@@ -10,13 +10,14 @@
 - [ ] Breaking change
 - [ ] Documentation update
 
-## Affected Templates
+## Affected Components
 
-<!-- Which templates are affected? -->
+<!-- Which components are affected? -->
 
-- [ ] GitHub Actions (`github/workflows/`)
-- [ ] Azure DevOps (`azure-devops/templates/`)
-- [ ] Both
+- [ ] Workflows (`.github/workflows/`)
+- [ ] Actions (`.github/actions/`)
+- [ ] Bicep modules (`bicep/`)
+- [ ] Documentation
 
 ## Checklist
 

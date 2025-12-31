@@ -1,8 +1,11 @@
 # =============================================================================
-# Reusable Workflow: Full ALM Pipeline
+# Reusable Workflow: Solution Promote
 # =============================================================================
-# Complete ALM pipeline that exports a solution from source environment,
-# optionally builds plugins, and deploys to target environment.
+# Promotes a solution from a source environment to a target environment.
+# Exports from source, optionally builds plugins, and deploys to target.
+#
+# Use this workflow for environment-to-environment promotion (e.g., dev → qa → prod).
+# For git-to-environment deployment, use solution-deploy.yml instead.
 #
 # Features:
 #   - Export from source environment (managed or unmanaged)
@@ -14,8 +17,8 @@
 #
 # Usage:
 #   jobs:
-#     alm:
-#       uses: joshsmithxrm/ppds-alm/github/workflows/full-alm.yml@v1
+#     promote:
+#       uses: joshsmithxrm/ppds-alm/.github/workflows/solution-promote.yml@v1
 #       with:
 #         solution-name: MySolution
 #         solution-folder: solutions/MySolution/src
@@ -34,7 +37,7 @@
 #
 # =============================================================================
 
-name: Full ALM Pipeline
+name: Solution Promote
 
 on:
   workflow_call:
@@ -361,7 +364,7 @@ jobs:
     steps:
       - name: Generate summary
         run: |
-          echo "## ALM Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Solution Promote Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY

@@ -42,7 +42,7 @@ on:
 
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -74,11 +74,11 @@ jobs:
 | `plugin-deploy.yml` | Deploy plugins | Plugin-only deployments |
 | `plugin-extract.yml` | Extract registrations | Generate registration file |
 
-### Complete Pipeline
+### Environment Promotion
 
 | Workflow | Purpose | When to Use |
 |----------|---------|-------------|
-| `full-alm.yml` | Export, build, deploy | Full ALM automation |
+| `solution-promote.yml` | Export, build, deploy | Promote between environments |
 
 ## Example Workflows
 
@@ -94,7 +94,7 @@ on:
 
 jobs:
   export:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-export.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-export.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -118,7 +118,7 @@ on:
 
 jobs:
   validate:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-validate.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-validate.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -146,7 +146,7 @@ on:
 jobs:
   deploy:
     environment: Prod  # Requires approval if configured
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -171,7 +171,7 @@ on:
 
 jobs:
   build:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-build.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-build.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -181,7 +181,7 @@ jobs:
   deploy-qa:
     needs: build
     environment: QA
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -195,7 +195,7 @@ jobs:
   deploy-prod:
     needs: deploy-qa
     environment: Prod
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
     with:
       solution-name: MySolution
       solution-folder: solutions/MySolution/src
@@ -308,10 +308,10 @@ Use version tags to ensure stability:
 
 ```yaml
 # Recommended: major version tag
-uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
 
 # Locked to specific version
-uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1.0.0
+uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1.0.0
 ```
 
 ## Troubleshooting

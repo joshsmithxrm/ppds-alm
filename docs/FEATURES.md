@@ -352,7 +352,7 @@ Find versions at: https://www.nuget.org/packages/Microsoft.PowerApps.CLI.Tool
 # Simple: use pre-built workflow
 jobs:
   deploy:
-    uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+    uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
 ```
 
 ### Use Composite Actions for Custom Scenarios
@@ -371,10 +371,10 @@ jobs:
 
 ```yaml
 # Development: use major version
-uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
 
 # Production: pin specific version
-uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1.0.0
+uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1.0.0
 ```
 
 ### Separate Environments with GitHub Environments

@@ -15,7 +15,7 @@
 # Usage:
 #   jobs:
 #     deploy:
-#       uses: joshsmithxrm/ppds-alm/github/workflows/solution-deploy.yml@v1
+#       uses: joshsmithxrm/ppds-alm/.github/workflows/solution-deploy.yml@v1
 #       with:
 #         solution-name: MySolution
 #         solution-folder: solutions/MySolution/src

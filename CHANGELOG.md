@@ -7,53 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.1] - 2025-12-31
+## [1.0.0] - 2025-12-31
 
-### Fixed
-
-- **`check-solution` action** - Fixed "No profiles were found" error by adding self-contained authentication ([#13](https://github.com/joshsmithxrm/ppds-alm/issues/13))
-  - Added required inputs: `environment-url`, `tenant-id`, `client-id`, `client-secret`
-  - Action now manages its own auth lifecycle (clear → create → work → clear)
-  - Added input validation for empty strings with clear error messages
-  - Updated documentation in ACTIONS_REFERENCE.md and FEATURES.md
-
-## [1.1.0] - 2025-12-30
-
-### Added
-
-- **Azure Integration Bicep Modules** - Reusable infrastructure-as-code for Dataverse → Azure integrations
-  - `log-analytics.bicep` - Log Analytics Workspace
-  - `application-insights.bicep` - Application Insights with Log Analytics integration
-  - `storage-account.bicep` - Storage Account for Function Apps
-  - `app-service-plan.bicep` - Shared hosting plan
-  - `app-service.bicep` - App Service for Web API hosting
-  - `function-app.bicep` - Azure Function App with managed identity
-  - `service-bus.bicep` - Service Bus namespace with queue creation (least privilege auth)
-  - `dataverse-integration.bicep` - Composite module wiring all resources together
-
-- **`deploy-azure-integration.yml`** - Reusable workflow for deploying Azure integration resources
-  - Supports dev/qa/prod environments with appropriate defaults
-  - Uses Azure OIDC authentication (no client secret needed)
-  - Configurable Service Bus queues via JSON input
-  - Outputs resource URLs and names for downstream jobs
-
-- **CAF Naming Conventions** - All Bicep modules follow [Microsoft Cloud Adoption Framework naming](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)
-  - Pattern: `{resource-type}-{workload}-{environment}-[{region}]-{instance}`
-  - Standard abbreviations: `app`, `func`, `sbns`, `appi`, `log`, `asp`, `st`, `rg`
-  - Optional `region` component for multi-region deployments
-  - New `instance` parameter for multi-deployment scenarios (default: `001`)
-
-- **Documentation** - Comprehensive guides for Azure integration modules (`docs/AZURE_INTEGRATION.md`, `docs/AZURE_OIDC_SETUP.md`)
-
-### Security
-
-- **Service Bus** - Uses scoped `app-access` authorization rule with `Send` and `Listen` permissions only (principle of least privilege). `RootManageSharedAccessKey` is not exposed.
-- **OIDC Authentication** - Workflow uses `vars.*` for client-id, tenant-id, and subscription-id (identifiers, not secrets). No client secret required.
-- **Managed Identity** - All compute resources (App Service, Function App) have system-assigned managed identity enabled by default.
-
-## [1.0.0] - 2025-12-26
-
-Initial release of ppds-alm - reusable GitHub Actions and workflows for Power Platform ALM.
+Initial release of ppds-alm - reusable GitHub Actions workflows and composite actions for Power Platform ALM.
 
 ### Composite Actions
 
@@ -64,7 +20,7 @@ Ten self-contained actions for Power Platform CI/CD:
 | `setup-pac-cli` | Install .NET SDK and Power Platform CLI with version pinning |
 | `pac-auth` | Authenticate to environment (self-contained with automatic cleanup) |
 | `export-solution` | Export and unpack solution (self-contained auth, includes Linux bug workaround) |
-| `import-solution` | Import solution with version check, retry logic, and fresh auth before publish |
+| `import-solution` | Import solution with version check, retry logic, upgrade support, and fresh auth before publish |
 | `pack-solution` | Pack solution from unpacked source files |
 | `build-solution` | Build .NET solution with optional test execution |
 | `check-solution` | Run Solution Checker with configurable severity thresholds |
@@ -74,37 +30,60 @@ Ten self-contained actions for Power Platform CI/CD:
 
 ### Reusable Workflows
 
-- **`solution-export.yml`** - Export solution with optional noise filtering and version stamping
-- **`solution-import.yml`** - Import solution with version comparison and retry logic
-- **`solution-deploy.yml`** - Full deployment: build, pack, and import with settings auto-detection
-- **`solution-build.yml`** - Build .NET code and pack solution with artifact upload
-- **`solution-validate.yml`** - PR validation with build, pack, tests, and Solution Checker
-- **`full-alm.yml`** - Complete ALM pipeline: export, build, pack, and deploy
+Nine workflows for common ALM scenarios:
+
+| Workflow | Description |
+|----------|-------------|
+| `solution-export.yml` | Export solution with optional noise filtering and version stamping |
+| `solution-import.yml` | Import solution with version comparison and retry logic |
+| `solution-build.yml` | Build .NET code and pack solution with artifact upload |
+| `solution-validate.yml` | PR validation with build, pack, tests, and Solution Checker |
+| `solution-deploy.yml` | Full deployment: build, pack, and import with settings auto-detection |
+| `solution-promote.yml` | Promote solution from source to target environment |
+| `plugin-extract.yml` | Extract plugin registrations from compiled assembly |
+| `plugin-deploy.yml` | Deploy plugins with drift detection |
+| `azure-deploy.yml` | Deploy Azure integration infrastructure via Bicep |
+
+### Azure Integration
+
+- **Bicep Modules** - Reusable infrastructure-as-code for Dataverse integrations
+  - `log-analytics.bicep` - Log Analytics Workspace
+  - `application-insights.bicep` - Application Insights with Log Analytics integration
+  - `storage-account.bicep` - Storage Account for Function Apps
+  - `app-service-plan.bicep` - Shared hosting plan
+  - `app-service.bicep` - App Service for Web API hosting
+  - `function-app.bicep` - Azure Function App with managed identity
+  - `service-bus.bicep` - Service Bus namespace with queue creation
+  - `dataverse-integration.bicep` - Composite module wiring all resources together
+
+- **CAF Naming** - All Bicep modules follow Microsoft Cloud Adoption Framework naming conventions
 
 ### Key Features
 
-- **Self-Contained Auth** - Actions manage their own authentication lifecycle following Microsoft's pattern (clear → create → work → clear), preventing token expiration issues on long-running operations
+- **Self-Contained Auth** - Actions manage their own authentication lifecycle (clear → create → work → clear)
 - **Smart Import** - Version comparison skips import if target has same or newer version
+- **Solution Upgrades** - Support for `--stage-and-upgrade` and `--import-as-holding`
 - **Retry Logic** - Configurable retry for transient failures (concurrent import conflicts)
-- **Noise Filtering** - Automatic filtering of volatile export changes (version stamps, canvas app URIs, workflow session IDs)
+- **Noise Filtering** - Automatic filtering of volatile export changes
 - **Solution Checker** - Quality validation with severity-based pass/fail thresholds
 - **Deployment Settings** - Auto-detection and application of environment-specific configuration
-- **Linux Compatibility** - Workarounds for PAC CLI bugs on Linux runners (--allowDelete, libsecret)
+- **Linux Compatibility** - Workarounds for PAC CLI bugs on Linux runners
 
 ### Documentation
 
 - Strategy guides (ALM Overview, Branching Strategy, Environment Strategy)
-- Comprehensive actions reference
+- Comprehensive action and workflow references
 - Authentication setup guide
+- Azure OIDC setup guide
+- Azure coordination guide
+- Consumption guide (actions vs workflows)
 - Troubleshooting guide
 
 ### Dependencies
 
 - Power Platform CLI (installed automatically by `setup-pac-cli`)
 - .NET SDK 8.x (installed automatically)
-- Optional: [PPDS.Tools](https://github.com/joshsmithxrm/ppds-tools) for advanced plugin operations
+- PPDS.Cli (for plugin workflows)
 
-[Unreleased]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.1.1...HEAD
-[1.1.1]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.0.0...v1.1.0
+[Unreleased]: https://github.com/joshsmithxrm/ppds-alm/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/joshsmithxrm/ppds-alm/releases/tag/v1.0.0
