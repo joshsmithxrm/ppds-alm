@@ -171,12 +171,14 @@ jobs:
       - name: Deploy Bicep template
         id: deploy
         shell: pwsh
+        env:
+          SERVICE_BUS_QUEUES: ${{ inputs.service-bus-queues }}
         run: |
           Write-Host "Deploying to resource group '${{ inputs.resource-group }}'..."
           Write-Host "  appNamePrefix: ${{ inputs.app-name-prefix }}"
           Write-Host "  environment: ${{ inputs.environment }}"
           Write-Host "  location: ${{ inputs.location }}"
-          Write-Host "  serviceBusQueues: ${{ inputs.service-bus-queues }}"
+          Write-Host "  serviceBusQueues: $env:SERVICE_BUS_QUEUES"
 
           $deploymentName = "ppds-alm-${{ inputs.environment }}-$(Get-Date -Format 'yyyyMMddHHmmss')"
 
@@ -189,7 +191,7 @@ jobs:
             '--parameters', "appNamePrefix=${{ inputs.app-name-prefix }}"
             '--parameters', "environment=${{ inputs.environment }}"
             '--parameters', "location=${{ inputs.location }}"
-            '--parameters', "serviceBusQueues=${{ inputs.service-bus-queues }}"
+            '--parameters', "serviceBusQueues=$env:SERVICE_BUS_QUEUES"
             '--output', 'json'
           )
 
