@@ -112,10 +112,10 @@ jobs:
 
     steps:
       - name: Checkout caller repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout ppds-alm for Bicep modules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: joshsmithxrm/ppds-alm
           path: .ppds-alm
