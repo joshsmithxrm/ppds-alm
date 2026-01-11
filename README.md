@@ -180,11 +180,11 @@ Use version tags for stability:
 
 | Repository | Purpose | Install |
 |------------|---------|---------|
-| [power-platform-developer-suite](https://github.com/joshsmithxrm/power-platform-developer-suite) | VS Code Extension | VS Code Marketplace |
-| [ppds-sdk](https://github.com/joshsmithxrm/ppds-sdk) | .NET Plugin Attributes | `dotnet add package PPDS.Plugins` |
+| [power-platform-developer-suite](https://github.com/joshsmithxrm/power-platform-developer-suite) | SDK + CLI + TUI + Extension + MCP | NuGet / VS Code Marketplace |
 | [ppds-tools](https://github.com/joshsmithxrm/ppds-tools) | PowerShell Module | `Install-Module PPDS.Tools` |
 | **ppds-alm** | CI/CD Templates | Reference in pipelines |
 | [ppds-demo](https://github.com/joshsmithxrm/ppds-demo) | Reference Implementation | Clone |
+| [ppds-orchestration](https://github.com/joshsmithxrm/ppds-orchestration) | Parallel Claude Code Sessions | npm |
 
 ## Contributing
 
