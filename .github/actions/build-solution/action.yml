@@ -155,8 +155,14 @@ runs:
       run: |
         echo "Locating build outputs..."
 
-        # Classic plugin assembly
-        CLASSIC_DLL=$(find "$PLUGINS_FOLDER" -name "*.dll" -path "*bin/${CONFIG}*" -not -name "Microsoft.*" -not -name "System.*" 2>/dev/null | head -1 || echo "")
+        # Classic plugin assembly — derive from .csproj name to avoid picking up NuGet dependencies
+        PLUGIN_CSPROJ=$(find "$PLUGINS_FOLDER" -name "*.csproj" 2>/dev/null | head -1 || echo "")
+        if [ -n "$PLUGIN_CSPROJ" ]; then
+          PROJECT_NAME=$(basename "$PLUGIN_CSPROJ" .csproj)
+          CLASSIC_DLL=$(find "$PLUGINS_FOLDER" -name "${PROJECT_NAME}.dll" -path "*bin/${CONFIG}*" 2>/dev/null | head -1 || echo "")
+        else
+          CLASSIC_DLL=""
+        fi
         if [ -n "$CLASSIC_DLL" ]; then
           echo "Classic plugin assembly: $CLASSIC_DLL"
           echo "classic_assembly=$CLASSIC_DLL" >> $GITHUB_OUTPUT
