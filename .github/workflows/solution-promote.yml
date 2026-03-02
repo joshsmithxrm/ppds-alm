@@ -190,7 +190,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download solution source
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: solution-${{ inputs.solution-name }}-source
           path: ${{ inputs.solution-folder }}
@@ -239,14 +239,14 @@ jobs:
 
       - name: Download solution source
         if: inputs.build-plugins == false
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: solution-${{ inputs.solution-name }}-source
           path: ${{ inputs.solution-folder }}
 
       - name: Download built solution
         if: inputs.build-plugins == true
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: solution-${{ inputs.solution-name }}-built
           path: ${{ inputs.solution-folder }}
@@ -286,7 +286,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download solution package
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: solution-${{ inputs.solution-name }}-package
           path: ./exports
