@@ -168,7 +168,7 @@ jobs:
           fi
 
       - name: Upload solution source
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: solution-${{ inputs.solution-name }}-source
           path: ${{ inputs.solution-folder }}
@@ -218,7 +218,7 @@ jobs:
           solution-folder: ${{ inputs.solution-folder }}
 
       - name: Upload updated solution
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: solution-${{ inputs.solution-name }}-built
           path: ${{ inputs.solution-folder }}
@@ -264,7 +264,7 @@ jobs:
           package-type: ${{ inputs.deploy-managed && 'Managed' || 'Unmanaged' }}
 
       - name: Upload solution package
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: solution-${{ inputs.solution-name }}-package
           path: ${{ steps.pack.outputs.solution-path }}
