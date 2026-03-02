@@ -159,7 +159,7 @@ jobs:
           solution-folder: ${{ inputs.solution-folder }}
 
       - name: Upload updated solution folder
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: solution-${{ inputs.solution-name }}-built
           path: ${{ inputs.solution-folder }}
@@ -212,7 +212,7 @@ jobs:
           package-type: 'Unmanaged'
 
       - name: Upload solution packages
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: solution-${{ inputs.solution-name }}-packages
           path: ${{ inputs.output-folder }}/*.zip
