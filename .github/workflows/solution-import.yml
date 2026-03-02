@@ -103,7 +103,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download solution artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: solution-*
           path: ./artifacts
