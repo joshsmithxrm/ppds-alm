@@ -3,7 +3,8 @@ param(
     [string]$PluginsFolder = 'src/Plugins',
     [string]$Configuration = 'Release',
     [string]$ProjectPath = '',
-    [string]$TargetFramework = ''
+    [string]$TargetFramework = '',
+    [string]$SolutionPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,6 +39,27 @@ $arguments = @(
     '-getProperty:TargetPath,TargetFramework,TargetFrameworks',
     "-p:Configuration=$Configuration"
 )
+if ($SolutionPath) {
+    if (-not (Test-Path -LiteralPath $SolutionPath -PathType Leaf)) {
+        throw "The selected solution does not exist: $SolutionPath"
+    }
+    $solution = Get-Item -LiteralPath $SolutionPath
+    # dotnet build <solution> supplies these globals to its projects. Preserve
+    # them when evaluating a project directly, including the trailing separator.
+    $solutionProperties = [ordered]@{
+        SolutionDir = $solution.DirectoryName + [IO.Path]::DirectorySeparatorChar
+        SolutionPath = $solution.FullName
+        SolutionFileName = $solution.Name
+        SolutionName = $solution.BaseName
+        SolutionExt = $solution.Extension
+        BuildingSolutionFile = 'true'
+    }
+    foreach ($property in $solutionProperties.GetEnumerator()) {
+        # MSBuild treats commas/semicolons in -p values as property separators.
+        $value = $property.Value.Replace('%', '%25').Replace(';', '%3B').Replace(',', '%2C')
+        $arguments += "-p:$($property.Key)=$value"
+    }
+}
 if ($TargetFramework) { $arguments += "-p:TargetFramework=$TargetFramework" }
 $raw = & dotnet @arguments
 if ($LASTEXITCODE -ne 0) {
@@ -56,7 +78,7 @@ if (-not $TargetFramework -and $properties.TargetFrameworks) {
     }
     if ($frameworks.Count -eq 1) {
         & $PSCommandPath -PluginsFolder $PluginsFolder -Configuration $Configuration `
-            -ProjectPath $projects[0].FullName -TargetFramework $frameworks[0]
+            -ProjectPath $projects[0].FullName -TargetFramework $frameworks[0] -SolutionPath $SolutionPath
         return
     }
 }

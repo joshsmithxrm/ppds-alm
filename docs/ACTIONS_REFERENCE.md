@@ -265,7 +265,7 @@ Builds the .NET solution containing plugins, workflow activities, and custom API
 
 **Auto-Detection:**
 - If `solution-path` is empty, finds first `.sln` file in repository root
-- In prepared 1.0.1, selects the single classic plugin project under `plugins-folder`, or the explicit `plugin-project`. Evaluates MSBuild `TargetPath` with the build configuration and selected framework, including imported properties and custom output paths.
+- In prepared 1.0.1, selects the single classic plugin project under `plugins-folder`, or the explicit `plugin-project`. Evaluates MSBuild `TargetPath` with the build configuration, selected framework, and selected solution globals (`SolutionDir`, `SolutionPath`, name/file/extension, and `BuildingSolutionFile`), including imported properties and solution-relative custom output paths.
 - A folder with multiple projects requires `plugin-project`; a multi-target project requires `plugin-target-framework`. Missing selected output fails instead of falling back to a copied dependency such as `PPDS.Plugins.dll`.
 - No classic plugin project produces an empty classic output, so package-only solutions still work. Plugin package and shared-entities outputs retain their folder conventions.
 

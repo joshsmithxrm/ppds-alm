@@ -11,7 +11,7 @@ Prepared patch target: **1.0.1**. No release or version tag has been created or 
 
 ### Fixed
 
-- Select classic plugin DLLs from the evaluated project `TargetPath`, including imported/conditional assembly names, instead of taking the first output DLL. Ambiguous projects or target frameworks require the new optional `plugin-project` / `plugin-target-framework` inputs.
+- Select classic plugin DLLs from the evaluated project `TargetPath`, including imported/conditional assembly names and output paths based on the selected solution, instead of taking the first output DLL. Ambiguous projects or target frameworks require the new optional `plugin-project` / `plugin-target-framework` inputs.
 - Use the PPDS.Cli 1.4.1 `plugins extract`, `plugins diff`, `plugins deploy`, and named authentication profile contracts. Plugin workflows default to the tested CLI version; explicit version overrides remain supported.
 - Stop plugin deployment when drift comparison fails or returns invalid data. A valid diff exit code 1 remains a successful comparison reporting drift.
 - Clean up only the workflow's temporary PPDS profile.

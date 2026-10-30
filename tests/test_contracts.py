@@ -11,6 +11,14 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 ACTION = ROOT / ".github/actions/build-solution/Find-PluginAssembly.ps1"
 CLI_COMMAND = os.environ.get("PPDS_TEST_CLI_COMMAND")
+PACKAGED_CLI_WRAPPER = r"""
+function global:ppds {
+    $command = @(ConvertFrom-Json $env:PPDS_TEST_CLI_COMMAND)
+    $arguments = @($command | Select-Object -Skip 1) + @($args)
+    & $command[0] @arguments
+    $global:LASTEXITCODE = $LASTEXITCODE
+}
+"""
 MOCK = r"""
 function global:ppds {
     $tokens = @($args)
@@ -179,11 +187,28 @@ class WorkflowContracts(unittest.TestCase):
                 self.assertEqual(result.returncode == 0, mode == "none")
                 self.assertEqual(output.exists(), mode == "none")
 
+    def test_packaged_cli_wrapper_accepts_singleton_executable_path(self):
+        with tempfile.TemporaryDirectory() as d:
+            shim = Path(d) / "single command shim.ps1"
+            trace = Path(d) / "trace.json"
+            shim.write_text('ConvertTo-Json -InputObject @($args) -Compress > $env:TRACE_FILE\n'
+                            '$global:LASTEXITCODE = 0\n', encoding="utf-8")
+            script = PACKAGED_CLI_WRAPPER + steps("plugin-extract.yml", "extract")["extract"]["run"]
+            result = run_pwsh(script, d, dict(
+                PPDS_TEST_CLI_COMMAND=json.dumps([str(shim)]), TRACE_FILE=str(trace),
+                ASSEMBLY_PATH="Consumer.Plugin.dll", OUTPUT_PATH="registrations.json",
+                GITHUB_OUTPUT=str(Path(d) / "outputs")))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(trace.read_text()), ["plugins", "extract", "--input",
+                             "Consumer.Plugin.dll", "--output", "registrations.json"])
+
     def test_composite_resolves_helper_from_installed_action(self):
         action = yaml.safe_load((ROOT / ".github/actions/build-solution/action.yml").read_text())
         locate = next(s for s in action["runs"]["steps"] if s.get("id") == "locate")
         self.assertEqual(locate["env"]["ALM_ACTION_PATH"], "${{ github.action_path }}")
         self.assertIn('$ALM_ACTION_PATH/Find-PluginAssembly.ps1', locate["run"])
+        self.assertEqual(locate["env"]["SELECTED_SOLUTION"], "${{ steps.detect.outputs.solution_path }}")
+        self.assertIn('-SolutionPath "$SELECTED_SOLUTION"', locate["run"])
         self.assertEqual(locate["env"]["PLUGIN_PROJECT"], "${{ inputs.plugin-project }}")
         self.assertEqual(locate["env"]["PLUGIN_TARGET_FRAMEWORK"], "${{ inputs.plugin-target-framework }}")
 
@@ -244,6 +269,41 @@ class AssemblySelection(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(Path(result.stdout.strip()), expected)
 
+    def test_uses_solution_context_for_custom_output_path(self):
+        project, _ = self.project()
+        project.write_text('''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>
+<TargetFrameworks>net8.0</TargetFrameworks>
+<OutputPath>$(SolutionDir)artifacts/$(SolutionName)/$(Configuration)/</OutputPath>
+<AssemblyName Condition="'$(SolutionPath)' != '' and '$(SolutionFileName)' == 'Consumer Solution.sln' and '$(SolutionExt)' == '.sln' and '$(BuildingSolutionFile)' == 'true'">Solution.Context.Plugin</AssemblyName>
+</PropertyGroup></Project>''', encoding="utf-8")
+        solution = self.root / "Consumer Solution.sln"
+        solution.write_text('''Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Chosen", "src/Plugins/Chosen/Chosen.csproj", "{E56AB91B-647C-4536-B0CA-17705D610983}"
+EndProject
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Release|Any CPU = Release|Any CPU
+    EndGlobalSection
+    GlobalSection(ProjectConfigurationPlatforms) = postSolution
+        {E56AB91B-647C-4536-B0CA-17705D610983}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {E56AB91B-647C-4536-B0CA-17705D610983}.Release|Any CPU.Build.0 = Release|Any CPU
+    EndGlobalSection
+EndGlobal
+''', encoding="utf-8")
+        # No package dependencies or feeds: use the installed .NET 8 reference pack.
+        config = self.root / "NuGet.Config"
+        config.write_text('<configuration><packageSources><clear /></packageSources></configuration>')
+        build = subprocess.run(["dotnet", "build", str(solution), "-c", "Release", "--nologo",
+                                "--configfile", str(config)], cwd=self.root, capture_output=True,
+                               text=True, encoding="utf-8", timeout=90)
+        self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
+        expected = self.root / "artifacts/Consumer Solution/Release/net8.0/Solution.Context.Plugin.dll"
+        self.assertTrue(expected.is_file(), build.stdout)
+        result = self.select("-SolutionPath", str(solution))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(result.stdout.strip()), expected)
+
     def test_multiple_projects_fail_until_explicitly_selected(self):
         project, expected = self.project()
         self.project("Other")
@@ -300,14 +360,7 @@ class PackagedCliContract(unittest.TestCase):
         self.assertEqual(dll.name, "Consumer.Plugin.dll")
         with tempfile.TemporaryDirectory() as d:
             output = Path(d) / "registrations.json"
-            script = r"""
-function global:ppds {
-    $command = ConvertFrom-Json $env:PPDS_TEST_CLI_COMMAND
-    $arguments = @($command | Select-Object -Skip 1) + @($args)
-    & $command[0] @arguments
-    $global:LASTEXITCODE = $LASTEXITCODE
-}
-""" + steps("plugin-extract.yml", "extract")["extract"]["run"]
+            script = PACKAGED_CLI_WRAPPER + steps("plugin-extract.yml", "extract")["extract"]["run"]
             result = run_pwsh(script, d, dict(ASSEMBLY_PATH=str(dll), OUTPUT_PATH=str(output),
                                              GITHUB_OUTPUT=str(Path(d) / "outputs")))
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
