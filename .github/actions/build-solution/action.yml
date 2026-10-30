@@ -58,6 +58,14 @@ inputs:
     description: 'Folder containing plugin projects (for output location)'
     required: false
     default: 'src/Plugins'
+  plugin-project:
+    description: 'Classic plugin .csproj to select when plugins-folder contains multiple projects'
+    required: false
+    default: ''
+  plugin-target-framework:
+    description: 'Target framework to select for a multi-targeted classic plugin project'
+    required: false
+    default: ''
   plugin-packages-folder:
     description: 'Folder containing plugin package projects (for output location)'
     required: false
@@ -150,13 +158,18 @@ runs:
       env:
         CONFIG: ${{ inputs.configuration }}
         PLUGINS_FOLDER: ${{ inputs.plugins-folder }}
+        PLUGIN_PROJECT: ${{ inputs.plugin-project }}
+        PLUGIN_TARGET_FRAMEWORK: ${{ inputs.plugin-target-framework }}
+        ALM_ACTION_PATH: ${{ github.action_path }}
         PLUGIN_PACKAGES_FOLDER: ${{ inputs.plugin-packages-folder }}
         SHARED_FOLDER: ${{ inputs.shared-folder }}
       run: |
         echo "Locating build outputs..."
 
         # Classic plugin assembly
-        CLASSIC_DLL=$(find "$PLUGINS_FOLDER" -name "*.dll" -path "*bin/${CONFIG}*" -not -name "Microsoft.*" -not -name "System.*" 2>/dev/null | head -1 || echo "")
+        CLASSIC_DLL=$(pwsh -NoProfile -File "$ALM_ACTION_PATH/Find-PluginAssembly.ps1" \
+          -PluginsFolder "$PLUGINS_FOLDER" -Configuration "$CONFIG" \
+          -ProjectPath "$PLUGIN_PROJECT" -TargetFramework "$PLUGIN_TARGET_FRAMEWORK")
         if [ -n "$CLASSIC_DLL" ]; then
           echo "Classic plugin assembly: $CLASSIC_DLL"
           echo "classic_assembly=$CLASSIC_DLL" >> $GITHUB_OUTPUT

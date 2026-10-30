@@ -164,7 +164,14 @@ ppds-alm/
 
 | ALM Version | Dependencies |
 |-------------|--------------|
-| v1.0.x | PPDS.Cli (for plugins), PAC CLI (for solutions) |
+| Released `v1.0.0` / current `v1` | Original plugin CLI contract; PAC CLI for solutions |
+| Prepared `1.0.1` (unreleased) | PPDS.Cli `1.4.1` by default for plugins; .NET SDK 8+ / PowerShell 7; GitHub.com reusable workflow identity contexts |
+
+The fixes on this branch are prepared for **1.0.1**. They are not available through `@v1` or `@v1.0.0` until a separate release updates the supported refs. Development consumers may test an explicit commit SHA. The new plugin workflow contract is tested offline against published PPDS.Cli 1.4.1 and the 1.4.2 candidate; live environment deployment is not part of this validation.
+
+In the prepared patch, classic plugin selection evaluates the project's MSBuild `TargetPath`. Select `plugin-project` when the plugin folder contains multiple projects, and `plugin-target-framework` for a multi-target project. These optional inputs are forwarded by solution build, validate, deploy, and promote workflows. See the [action reference](./docs/ACTIONS_REFERENCE.md#build-solution) and [offline tests](./tests/README.md).
+
+Solution workflows keep the consumer checkout and acquire ALM actions separately at `job.workflow_sha` from `job.workflow_repository`. They reserve `.ppds-alm-actions/` and require GitHub.com; they fail early if these workflow identity contexts are unavailable. GitHub Enterprise Server does not currently expose them.
 
 ## Versioning
 

@@ -37,10 +37,10 @@ on:
         type: boolean
         default: true
       ppds-cli-version:
-        description: 'PPDS.Cli version to install (default: latest)'
+        description: 'PPDS.Cli version to install (tested default: 1.4.1)'
         required: false
         type: string
-        default: ''
+        default: '1.4.1'
 
     secrets:
       environment-url:
@@ -68,6 +68,8 @@ jobs:
   deploy:
     name: Deploy Plugins
     runs-on: ubuntu-latest
+    env:
+      PPDS_PROFILE: alm-${{ github.run_id }}
 
     outputs:
       deployed: ${{ steps.deploy.outputs.deployed }}
@@ -88,11 +90,8 @@ jobs:
           CLI_VERSION: ${{ inputs.ppds-cli-version }}
         run: |
           echo "Installing PPDS.Cli..."
-          if [ -n "$CLI_VERSION" ]; then
-            dotnet tool install --global PPDS.Cli --version "$CLI_VERSION"
-          else
-            dotnet tool install --global PPDS.Cli
-          fi
+          CLI_VERSION="${CLI_VERSION:-1.4.1}"
+          dotnet tool install --global PPDS.Cli --version "$CLI_VERSION"
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: Verify installation
@@ -100,80 +99,90 @@ jobs:
         run: |
           ppds --version
 
-      - name: Clear existing auth
-        shell: bash
+      - name: Authenticate deployment profile
+        id: auth
+        shell: pwsh
+        env:
+          DATAVERSE_URL: ${{ secrets.environment-url }}
+          CLIENT_ID: ${{ secrets.client-id }}
+          CLIENT_SECRET: ${{ secrets.client-secret }}
+          TENANT_ID: ${{ secrets.tenant-id }}
         run: |
-          echo "Clearing any existing auth profiles..."
-          ppds auth clear 2>/dev/null || true
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          & ppds auth create --name $env:PPDS_PROFILE --environment $env:DATAVERSE_URL `
+            --applicationId $env:CLIENT_ID --clientSecret $env:CLIENT_SECRET --tenant $env:TENANT_ID
+          if ($LASTEXITCODE -ne 0) { throw "Plugin authentication failed (exit $LASTEXITCODE)." }
 
       - name: Detect drift
         id: drift
         if: inputs.detect-drift
-        shell: bash
+        shell: pwsh
         env:
           DATAVERSE_URL: ${{ secrets.environment-url }}
-          CLIENT_ID: ${{ secrets.client-id }}
-          CLIENT_SECRET: ${{ secrets.client-secret }}
-          TENANT_ID: ${{ secrets.tenant-id }}
           REGISTRATION_FILE: ${{ inputs.registration-file }}
         run: |
-          echo "Detecting plugin drift..."
-
-          # Run drift detection
-          set +e
-          DRIFT_OUTPUT=$(ppds plugin drift \
-            --registration-file "$REGISTRATION_FILE" \
-            --environment-url "$DATAVERSE_URL" \
-            --tenant-id "$TENANT_ID" \
-            --client-id "$CLIENT_ID" \
-            --client-secret "$CLIENT_SECRET" \
-            --output json 2>&1)
-          DRIFT_EXIT_CODE=$?
-          set -e
-
-          if [ $DRIFT_EXIT_CODE -eq 0 ]; then
-            if echo "$DRIFT_OUTPUT" | grep -q '"hasDrift":true'; then
-              echo "::warning::Plugin drift detected. Review changes below:"
-              echo "$DRIFT_OUTPUT" | jq '.' 2>/dev/null || echo "$DRIFT_OUTPUT"
-              echo "detected=true" >> $GITHUB_OUTPUT
-            else
-              echo "No drift detected."
-              echo "detected=false" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "::warning::Drift detection failed, proceeding with deployment"
-            echo "$DRIFT_OUTPUT"
-            echo "detected=unknown" >> $GITHUB_OUTPUT
-          fi
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          # Keep stderr separate: stdout is the CLI's versioned JSON result.
+          $json = & ppds plugins diff --config $env:REGISTRATION_FILE `
+            --profile $env:PPDS_PROFILE --environment $env:DATAVERSE_URL --output-format Json
+          $diffExit = $LASTEXITCODE
+          try { $result = ($json -join [Environment]::NewLine) | ConvertFrom-Json -Depth 100 }
+          catch { throw 'Drift detection returned invalid JSON; deployment stopped.' }
+          if ($diffExit -notin 0, 1 -or $result.success -isnot [bool] -or -not $result.success -or
+              $result.data -isnot [array] -or $result.data.Count -eq 0) {
+            throw "Drift detection failed (exit $diffExit); deployment stopped."
+          }
+          $hasDrift = $false
+          foreach ($assembly in $result.data) {
+            if (-not $assembly.assemblyName -or $assembly.assemblyMissing -isnot [bool]) {
+              throw 'Drift detection returned an unexpected assembly result; deployment stopped.'
+            }
+            $hasDrift = $hasDrift -or $assembly.assemblyMissing
+            foreach ($field in @('missingSteps', 'orphanedSteps', 'modifiedSteps', 'missingImages', 'orphanedImages', 'modifiedImages')) {
+              if ($assembly.$field -isnot [array]) {
+                throw 'Drift detection returned an unexpected change list; deployment stopped.'
+              }
+              $hasDrift = $hasDrift -or $assembly.$field.Count -gt 0
+            }
+          }
+          # Exit 1 means drift ONLY when accompanied by a successful, consistent result.
+          if (($diffExit -eq 1) -ne $hasDrift) {
+            throw 'Drift detection exit status does not match its result; deployment stopped.'
+          }
+          "detected=$($hasDrift.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if ($hasDrift) { Write-Warning 'Plugin drift detected; deployment will apply the configuration.' }
+          $global:LASTEXITCODE = 0
 
       - name: Deploy plugins
         id: deploy
-        shell: bash
+        shell: pwsh
         env:
           DATAVERSE_URL: ${{ secrets.environment-url }}
-          CLIENT_ID: ${{ secrets.client-id }}
-          CLIENT_SECRET: ${{ secrets.client-secret }}
-          TENANT_ID: ${{ secrets.tenant-id }}
           REGISTRATION_FILE: ${{ inputs.registration-file }}
         run: |
-          echo "Deploying plugins from $REGISTRATION_FILE..."
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $json = & ppds plugins deploy --config $env:REGISTRATION_FILE `
+            --profile $env:PPDS_PROFILE --environment $env:DATAVERSE_URL --output-format Json
+          if ($LASTEXITCODE -ne 0) { throw "Plugin deployment failed (exit $LASTEXITCODE)." }
+          try { $result = ($json -join [Environment]::NewLine) | ConvertFrom-Json -Depth 100 }
+          catch { throw 'Plugin deployment returned invalid JSON.' }
+          if ($result.success -isnot [bool] -or -not $result.success) {
+            throw 'Plugin deployment did not return a successful result.'
+          }
+          'deployed=true' >> $env:GITHUB_OUTPUT
 
-          ppds plugin deploy \
-            --registration-file "$REGISTRATION_FILE" \
-            --environment-url "$DATAVERSE_URL" \
-            --tenant-id "$TENANT_ID" \
-            --client-id "$CLIENT_ID" \
-            --client-secret "$CLIENT_SECRET"
-
-          echo "Plugin deployment complete."
-          echo "deployed=true" >> $GITHUB_OUTPUT
-
-      - name: Clear auth
-        if: always()
-        shell: bash
+      - name: Remove deployment profile
+        id: cleanup
+        if: always() && steps.auth.outcome != 'skipped'
+        shell: pwsh
         run: |
-          echo "Clearing auth profiles..."
-          ppds auth clear 2>/dev/null || true
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          & ppds auth delete --name $env:PPDS_PROFILE
+          if ($LASTEXITCODE -ne 0) { throw "Could not remove the temporary deployment profile (exit $LASTEXITCODE)." }
 
       - name: Deployment summary
         shell: bash
