@@ -20,6 +20,7 @@ Prepared patch target: **1.0.1**. No release or version tag has been created or 
 ### Added
 
 - Offline consumer project fixtures, workflow command-boundary tests, and packaged CLI extraction checks in the existing `Validate YAML` CI check.
+- Verify advertised auth/plugin option declarations with invalid-option controls; help exit zero alone does not establish argument parsing.
 
 ## [1.0.0] - 2025-12-31
 

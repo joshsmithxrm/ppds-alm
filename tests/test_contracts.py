@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -84,6 +85,58 @@ def run_pwsh(script, folder, env=None):
         env={**os.environ, **(env or {})}, capture_output=True, text=True,
         encoding="utf-8", timeout=90,
     )
+
+
+def assert_help_advertises_arguments(arguments, help_text):
+    """Check advertised syntax only; --help does not prove runtime parsing."""
+    command = " ".join(arguments[:2])
+    if not re.search(r"^\s+ppds " + re.escape(command) + r" \[options\]\s*$", help_text, re.MULTILINE):
+        raise AssertionError(f"Help does not describe command {command}")
+    if "\nOptions:\n" not in help_text:
+        raise AssertionError("Help has no option declarations")
+    options = {}
+    declarations = help_text.split("\nOptions:\n", 1)[1]
+    for line in declarations.splitlines():
+        match = re.match(r"^\s+(--?[\w?-]+(?:,\s*--?[\w?-]+)*)(?:\s+<([^>]+)>)?\s{2,}", line)
+        if match:
+            for alias in re.split(r",\s*", match[1]):
+                options[alias] = match[2]
+    index = 2
+    while index < len(arguments):
+        option = arguments[index]
+        if option not in options:
+            raise AssertionError(f"Option {option} is not advertised for {command}")
+        value_description = options[option]
+        index += 1
+        if value_description is not None:
+            if index == len(arguments) or arguments[index].startswith("-"):
+                raise AssertionError(f"Option {option} requires a value")
+            if "|" in value_description and arguments[index] not in value_description.split("|"):
+                raise AssertionError(f"Value {arguments[index]} is not advertised for {option}")
+            index += 1
+
+
+class HelpOptionEvidence(unittest.TestCase):
+    HELP = """Usage:
+  ppds plugins diff [options]
+
+Options:
+  -c, --config <config>            Required config; --not-an-option is prose.
+  -f, --output-format <Text|Json>  Output format
+  -?, -h, --help                   Show help
+"""
+
+    def test_matches_option_declarations_not_prefixes_or_description_text(self):
+        assert_help_advertises_arguments(["plugins", "diff", "--config", "path with spaces", "--output-format", "Json"], self.HELP)
+        for option in ("--conf", "--configuration", "--not-an-option"):
+            with self.subTest(option=option), self.assertRaisesRegex(AssertionError, "not advertised"):
+                assert_help_advertises_arguments(["plugins", "diff", option, "fixture"], self.HELP)
+
+    def test_rejects_wrong_command_missing_values_and_unadvertised_enum_values(self):
+        for arguments in (["plugins", "deploy", "--help"], ["plugins", "diff", "--config"],
+                          ["plugins", "diff", "--output-format", "Yaml"]):
+            with self.subTest(arguments=arguments), self.assertRaises(AssertionError):
+                assert_help_advertises_arguments(arguments, self.HELP)
 
 
 class WorkflowContracts(unittest.TestCase):
@@ -338,15 +391,31 @@ EndGlobal
 
 @unittest.skipUnless(CLI_COMMAND, "Set PPDS_TEST_CLI_COMMAND to an exact packaged CLI for offline extraction.")
 class PackagedCliContract(unittest.TestCase):
-    def test_actual_cli_accepts_workflow_options_with_help_only(self):
-        # --help short-circuits execution: never authenticate or contact Dataverse.
+    def test_actual_cli_help_advertises_workflow_option_contract(self):
+        # Help bypasses parsing, so compare exact advertised declarations instead.
         _, commands, _ = WorkflowContracts().run_deploy()
         for arguments in commands:
             with self.subTest(command=arguments[:2]):
                 result = subprocess.run([*json.loads(CLI_COMMAND), *arguments, "--help"],
                                         cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=90)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertIn("Usage:", result.stdout)
+                assert_help_advertises_arguments(arguments, result.stdout)
+
+    def test_help_success_cannot_hide_an_unadvertised_option(self):
+        _, commands, _ = WorkflowContracts().run_deploy()
+        invalid = "--ppds-nonexistent-option-negative-control"
+        for arguments in commands:
+            with self.subTest(command=arguments[:2]):
+                invalid_arguments = [*arguments, invalid]
+                result = subprocess.run([*json.loads(CLI_COMMAND), *invalid_arguments, "--help"],
+                                        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=90)
+                if result.returncode == 0:
+                    # Current packages return help/zero even for this invalid flag.
+                    # Ensure the evidence check rejects it despite that success.
+                    with self.assertRaisesRegex(AssertionError, re.escape(invalid) + " is not advertised"):
+                        assert_help_advertises_arguments(invalid_arguments, result.stdout)
+                else:
+                    self.assertIn(invalid, result.stdout + result.stderr)
 
     def test_actual_workflow_extracts_a_consumer_plugin(self):
         project = ROOT / "tests/fixtures/Plugin/Fixture.Plugin.csproj"
