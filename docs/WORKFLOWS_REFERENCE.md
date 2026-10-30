@@ -2,6 +2,10 @@
 
 This document provides a complete reference for all reusable workflows in ppds-alm.
 
+**Prepared 1.0.1 changes are unreleased.** Existing `@v1` / `@v1.0.0` examples keep their released behavior until a separate publication updates the tags. Test new behavior with the reviewed commit SHA.
+
+The prepared solution workflows acquire ALM composite actions into reserved `.ppds-alm-actions/` using the defining workflow's `job.workflow_repository` and `job.workflow_sha`, while keeping the caller repository as the working checkout. The reserved directory must not already exist. These identity contexts require GitHub.com (currently unavailable on GitHub Enterprise Server); missing identity fails before action execution. No additional token or OIDC permissions are required. See [GitHub's workflow identity documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#example-usage-of-job-context-workflow-identity).
+
 ---
 
 ## Overview
@@ -138,6 +142,8 @@ jobs:
 | `output-folder` | No | `./exports` | Output folder for packed files |
 | `package-type` | No | `Both` | Managed, Unmanaged, or Both |
 | `build-plugins` | No | `false` | Build .NET solution |
+| `plugin-project` | No | Auto-detect one project | Classic plugin `.csproj` path (prepared 1.0.1) |
+| `plugin-target-framework` | No | Project framework | Framework for a multi-target classic plugin (prepared 1.0.1) |
 | `dotnet-solution-path` | No | - | Path to .sln file |
 | `run-tests` | No | `false` | Run unit tests |
 | `configuration` | No | `Release` | Build configuration |
@@ -184,6 +190,8 @@ jobs:
 | `solution-name` | Yes | - | Solution unique name |
 | `solution-folder` | Yes | - | Path to unpacked solution |
 | `build-code` | No | `true` | Build .NET solution |
+| `plugin-project` | No | Auto-detect one project | Classic plugin `.csproj` path (prepared 1.0.1) |
+| `plugin-target-framework` | No | Project framework | Framework for a multi-target classic plugin (prepared 1.0.1) |
 | `run-tests` | No | `true` | Run unit tests |
 | `run-solution-checker` | No | `false` | Run Solution Checker |
 | `checker-fail-level` | No | `High` | Fail threshold (Critical/High/Medium/Low/Informational) |
@@ -228,6 +236,8 @@ jobs:
 | `solution-name` | Yes | - | Solution unique name |
 | `solution-folder` | Yes | - | Path to unpacked solution |
 | `build-plugins` | No | `false` | Build .NET solution |
+| `plugin-project` | No | Auto-detect one project | Classic plugin `.csproj` path (prepared 1.0.1) |
+| `plugin-target-framework` | No | Project framework | Framework for a multi-target classic plugin (prepared 1.0.1) |
 | `dotnet-solution-path` | No | - | Path to .sln file |
 | `package-type` | No | `Managed` | Managed or Unmanaged |
 | `skip-if-same-version` | No | `true` | Skip if version matches |
@@ -281,6 +291,8 @@ jobs:
 | `solution-folder` | Yes | - | Path for unpacked solution |
 | `deploy-managed` | No | `true` | Deploy as managed |
 | `build-plugins` | No | `false` | Build .NET solution |
+| `plugin-project` | No | Auto-detect one project | Classic plugin `.csproj` path (prepared 1.0.1) |
+| `plugin-target-framework` | No | Project framework | Framework for a multi-target classic plugin (prepared 1.0.1) |
 | `dotnet-solution-path` | No | - | Path to .sln file |
 | `skip-if-same-version` | No | `true` | Skip if version matches |
 
@@ -330,7 +342,7 @@ jobs:
 |-------|----------|---------|-------------|
 | `assembly-path` | Yes | - | Path to compiled plugin assembly |
 | `output-path` | No | `./registrations.json` | Output registrations file |
-| `ppds-cli-version` | No | Latest | PPDS.Cli version to install |
+| `ppds-cli-version` | No | `1.4.1` (prepared 1.0.1) | Tested PPDS.Cli version; explicit override supported |
 
 **Outputs:**
 
@@ -365,7 +377,7 @@ jobs:
 |-------|----------|---------|-------------|
 | `registration-file` | No | `./registrations.json` | Plugin registrations file |
 | `detect-drift` | No | `true` | Run drift detection first |
-| `ppds-cli-version` | No | Latest | PPDS.Cli version to install |
+| `ppds-cli-version` | No | `1.4.1` (prepared 1.0.1) | Tested PPDS.Cli version; explicit override supported |
 
 **Outputs:**
 
@@ -374,7 +386,11 @@ jobs:
 | `deployed` | Whether plugins were deployed |
 | `drift-detected` | Whether drift was detected |
 
-> **Production Tip:** For production pipelines, consider pinning the PPDS.Cli version using the `ppds-cli-version` input to ensure consistent, reproducible deployments and reduce supply chain risk.
+**Prepared 1.0.1 CLI contract:** Extraction uses `plugins extract --input <assembly> --output <file>`. Deployment creates a temporary named auth profile with `auth create --name ... --environment ... --applicationId ... --clientSecret ... --tenant ...`; `plugins diff` and `plugins deploy` receive `--config`, `--profile`, `--environment`, and `--output-format Json`. Cleanup deletes that named profile, including after failure. Credentials remain secret inputs.
+
+Drift detection accepts successful JSON containing the per-assembly comparison. Exit code 0 means no changes, and exit code 1 with valid change data means drift; drift is reported and deployment continues. Failed commands, malformed/error JSON, or inconsistent exit codes fail the job before deployment. `detect-drift: false` retains the explicit opt-out. `deployed` is set only after a successful deployment response.
+
+The default is pinned to PPDS.Cli 1.4.1, including an explicitly empty version input. An explicit `ppds-cli-version` overrides it and must support this command and JSON contract. Offline extraction also passes against the 1.4.2 candidate; this is not a claim of live environment validation.
 
 ---
 

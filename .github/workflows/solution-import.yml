@@ -110,14 +110,36 @@ jobs:
           merge-multiple: true
         continue-on-error: true
 
+      - name: Reserve ALM action directory
+        shell: pwsh
+        env:
+          ALM_WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ALM_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:ALM_WORKFLOW_SHA -or -not $env:ALM_WORKFLOW_REPOSITORY) { throw 'ALM reusable workflows require GitHub.com workflow identity contexts.' }
+          if (Test-Path -LiteralPath '.ppds-alm-actions') { throw 'The reserved .ppds-alm-actions directory already exists.' }
+          $exclude = & git rev-parse --git-path info/exclude
+          if ($LASTEXITCODE -ne 0) { throw 'Could not locate the consumer Git exclude file.' }
+          '.ppds-alm-actions/' >> $exclude
+
+      - name: Checkout matching ALM actions
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ppds-alm-actions
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
       - name: Setup PAC CLI
-        uses: ./.github/actions/setup-pac-cli
+        uses: ./.ppds-alm-actions/.github/actions/setup-pac-cli
 
       # Note: pac-auth step removed - import-solution is self-contained and manages its own auth lifecycle
 
       - name: Import solution
         id: import
-        uses: ./.github/actions/import-solution
+        uses: ./.ppds-alm-actions/.github/actions/import-solution
         with:
           solution-path: ${{ inputs.solution-path }}
           solution-name: ${{ inputs.solution-name }}

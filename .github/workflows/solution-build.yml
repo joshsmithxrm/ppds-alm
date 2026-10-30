@@ -31,6 +31,16 @@ name: Build Solution
 on:
   workflow_call:
     inputs:
+      plugin-project:
+        description: 'Classic plugin .csproj to select when multiple projects are present'
+        required: false
+        type: string
+        default: ''
+      plugin-target-framework:
+        description: 'Target framework to select for a multi-targeted classic plugin project'
+        required: false
+        type: string
+        default: ''
       solution-name:
         description: 'Solution unique name'
         required: true
@@ -136,24 +146,48 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Reserve ALM action directory
+        shell: pwsh
+        env:
+          ALM_WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ALM_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:ALM_WORKFLOW_SHA -or -not $env:ALM_WORKFLOW_REPOSITORY) { throw 'ALM reusable workflows require GitHub.com workflow identity contexts.' }
+          if (Test-Path -LiteralPath '.ppds-alm-actions') { throw 'The reserved .ppds-alm-actions directory already exists.' }
+          $exclude = & git rev-parse --git-path info/exclude
+          if ($LASTEXITCODE -ne 0) { throw 'Could not locate the consumer Git exclude file.' }
+          '.ppds-alm-actions/' >> $exclude
+
+      - name: Checkout matching ALM actions
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ppds-alm-actions
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
       - name: Build solution
         id: build
-        uses: ./.github/actions/build-solution
+        uses: ./.ppds-alm-actions/.github/actions/build-solution
         with:
+          plugin-project: ${{ inputs.plugin-project }}
+          plugin-target-framework: ${{ inputs.plugin-target-framework }}
           solution-path: ${{ inputs.dotnet-solution-path }}
           configuration: ${{ inputs.configuration }}
           run-tests: ${{ inputs.run-tests && 'true' || 'false' }}
 
       - name: Copy plugin assemblies
         if: steps.build.outputs.classic-assembly-path != '' && needs.prepare.outputs.has-plugins == 'true'
-        uses: ./.github/actions/copy-plugin-assemblies
+        uses: ./.ppds-alm-actions/.github/actions/copy-plugin-assemblies
         with:
           source-assembly: ${{ steps.build.outputs.classic-assembly-path }}
           solution-folder: ${{ inputs.solution-folder }}
 
       - name: Copy plugin packages
         if: steps.build.outputs.plugin-package-path != '' && needs.prepare.outputs.has-plugins == 'true'
-        uses: ./.github/actions/copy-plugin-packages
+        uses: ./.ppds-alm-actions/.github/actions/copy-plugin-packages
         with:
           source-package: ${{ steps.build.outputs.plugin-package-path }}
           solution-folder: ${{ inputs.solution-folder }}
@@ -188,13 +222,35 @@ jobs:
           path: ${{ inputs.solution-folder }}
         continue-on-error: true
 
+      - name: Reserve ALM action directory
+        shell: pwsh
+        env:
+          ALM_WORKFLOW_SHA: ${{ job.workflow_sha }}
+          ALM_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:ALM_WORKFLOW_SHA -or -not $env:ALM_WORKFLOW_REPOSITORY) { throw 'ALM reusable workflows require GitHub.com workflow identity contexts.' }
+          if (Test-Path -LiteralPath '.ppds-alm-actions') { throw 'The reserved .ppds-alm-actions directory already exists.' }
+          $exclude = & git rev-parse --git-path info/exclude
+          if ($LASTEXITCODE -ne 0) { throw 'Could not locate the consumer Git exclude file.' }
+          '.ppds-alm-actions/' >> $exclude
+
+      - name: Checkout matching ALM actions
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ppds-alm-actions
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
       - name: Setup PAC CLI
-        uses: ./.github/actions/setup-pac-cli
+        uses: ./.ppds-alm-actions/.github/actions/setup-pac-cli
 
       - name: Pack Managed solution
         id: pack-managed
         if: inputs.package-type == 'Managed' || inputs.package-type == 'Both'
-        uses: ./.github/actions/pack-solution
+        uses: ./.ppds-alm-actions/.github/actions/pack-solution
         with:
           solution-folder: ${{ inputs.solution-folder }}
           solution-name: ${{ inputs.solution-name }}
@@ -204,7 +260,7 @@ jobs:
       - name: Pack Unmanaged solution
         id: pack-unmanaged
         if: inputs.package-type == 'Unmanaged' || inputs.package-type == 'Both'
-        uses: ./.github/actions/pack-solution
+        uses: ./.ppds-alm-actions/.github/actions/pack-solution
         with:
           solution-folder: ${{ inputs.solution-folder }}
           solution-name: ${{ inputs.solution-name }}

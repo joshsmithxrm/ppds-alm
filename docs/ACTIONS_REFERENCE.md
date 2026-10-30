@@ -248,6 +248,8 @@ Builds the .NET solution containing plugins, workflow activities, and custom API
 | `run-tests` | No | `false` | Run unit tests after build |
 | `test-filter` | No | - | Test filter expression |
 | `plugins-folder` | No | `src/Plugins` | Folder containing plugin projects |
+| `plugin-project` | No | Auto-detect one project | Explicit classic plugin `.csproj` path (prepared 1.0.1) |
+| `plugin-target-framework` | No | Project framework | Framework to select when the project targets multiple frameworks (prepared 1.0.1) |
 | `plugin-packages-folder` | No | `src/PluginPackages` | Folder containing plugin package projects |
 | `shared-folder` | No | `src/Shared` | Folder containing shared projects |
 
@@ -263,7 +265,11 @@ Builds the .NET solution containing plugins, workflow activities, and custom API
 
 **Auto-Detection:**
 - If `solution-path` is empty, finds first `.sln` file in repository root
-- Locates build outputs based on folder conventions
+- In prepared 1.0.1, selects the single classic plugin project under `plugins-folder`, or the explicit `plugin-project`. Evaluates MSBuild `TargetPath` with the build configuration, selected framework, and selected solution globals (`SolutionDir`, `SolutionPath`, name/file/extension, and `BuildingSolutionFile`), including imported properties and solution-relative custom output paths.
+- A folder with multiple projects requires `plugin-project`; a multi-target project requires `plugin-target-framework`. Missing selected output fails instead of falling back to a copied dependency such as `PPDS.Plugins.dll`.
+- No classic plugin project produces an empty classic output, so package-only solutions still work. Plugin package and shared-entities outputs retain their folder conventions.
+
+The new inputs and selection behavior are **unreleased**, prepared for 1.0.1; the `@v1` example above still resolves to the released version until publication. To test this source, pin the action to its reviewed commit SHA. For a custom layout, pass `plugin-project: src/MyPlugin/MyPlugin.csproj`; for multiple frameworks also pass `plugin-target-framework: net462`. The selected project must already be included in the solution being built. The helper is loaded from the installed action directory (`github.action_path`), so consumers do not need ALM scripts in their own checkout.
 
 ---
 

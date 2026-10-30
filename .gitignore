@@ -17,3 +17,8 @@ Thumbs.db
 
 # Temp folder
 tmp/
+
+# Offline test build outputs
+**/bin/
+**/obj/
+__pycache__/

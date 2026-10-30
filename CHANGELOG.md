@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Prepared patch target: **1.0.1**. No release or version tag has been created or moved.
+
+### Fixed
+
+- Select classic plugin DLLs from the evaluated project `TargetPath`, including imported/conditional assembly names and output paths based on the selected solution, instead of taking the first output DLL. Ambiguous projects or target frameworks require the new optional `plugin-project` / `plugin-target-framework` inputs.
+- Use the PPDS.Cli 1.4.1 `plugins extract`, `plugins diff`, `plugins deploy`, and named authentication profile contracts. Plugin workflows default to the tested CLI version; explicit version overrides remain supported.
+- Stop plugin deployment when drift comparison fails or returns invalid data. A valid diff exit code 1 remains a successful comparison reporting drift.
+- Clean up only the workflow's temporary PPDS profile.
+- Acquire composite actions from the exact ALM workflow repository and commit while retaining the consumer checkout, using GitHub.com `job.workflow_repository` and `job.workflow_sha`.
+
+### Added
+
+- Offline consumer project fixtures, workflow command-boundary tests, and packaged CLI extraction checks in the existing `Validate YAML` CI check.
+
 ## [1.0.0] - 2025-12-31
 
 Initial release of ppds-alm - reusable GitHub Actions workflows and composite actions for Power Platform ALM.

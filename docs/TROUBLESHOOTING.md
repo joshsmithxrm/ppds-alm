@@ -159,16 +159,21 @@ with:
 
 ### Plugin assembly not found after build
 
-**Cause:** Build output location doesn't match expected conventions.
+In prepared 1.0.1 (unreleased), `build-solution` evaluates the selected project's MSBuild `TargetPath`. It does not pick a dependency DLL from the output directory.
 
-**Solution:**
-1. Check the `plugins-folder` input matches your project structure:
-```yaml
-with:
-  plugins-folder: 'src/Plugins'  # Default
-```
-2. Verify build output exists in `bin/Release` (or specified configuration)
-3. Check that build succeeded (review logs)
+1. Set `plugin-project` to the intended `.csproj` if `src/Plugins` contains multiple projects or uses a different layout. The composite action also accepts `plugins-folder` for single-project discovery.
+2. Set `plugin-target-framework` for a multi-target project, for example `net462`.
+3. Ensure the selected project is included in the built solution and the requested configuration/framework output exists. Imported `AssemblyName` and `OutputPath` properties are evaluated automatically.
+
+These selectors are forwarded by solution build, validate, deploy, and promote workflows. Test the prepared patch by commit SHA; current `@v1` does not acquire these inputs until release.
+
+### Plugin drift comparison fails
+
+The prepared 1.0.1 plugin workflow stops before deployment when comparison fails, authentication fails, or CLI output does not match the supported JSON contract. Check the CLI diagnostic and selected `ppds-cli-version` (default 1.4.1). A valid diff response with exit code 1 reports real drift and is allowed to continue. Do not treat an arbitrary nonzero exit as successful comparison.
+
+### ALM workflow identity or reserved directory error
+
+The prepared solution workflows require GitHub.com `job.workflow_repository` and `job.workflow_sha` to fetch matching ALM actions. GitHub Enterprise Server currently lacks these contexts. The consumer checkout must not contain `.ppds-alm-actions/`; it is reserved for the separate action checkout.
 
 ### Plugin package (.nupkg) not found
 

@@ -27,10 +27,10 @@ on:
         type: string
         default: './registrations.json'
       ppds-cli-version:
-        description: 'PPDS.Cli version to install (default: latest)'
+        description: 'PPDS.Cli version to install (tested default: 1.4.1)'
         required: false
         type: string
-        default: ''
+        default: '1.4.1'
 
     outputs:
       registration-file:
@@ -60,11 +60,8 @@ jobs:
           CLI_VERSION: ${{ inputs.ppds-cli-version }}
         run: |
           echo "Installing PPDS.Cli..."
-          if [ -n "$CLI_VERSION" ]; then
-            dotnet tool install --global PPDS.Cli --version "$CLI_VERSION"
-          else
-            dotnet tool install --global PPDS.Cli
-          fi
+          CLI_VERSION="${CLI_VERSION:-1.4.1}"
+          dotnet tool install --global PPDS.Cli --version "$CLI_VERSION"
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: Verify installation
@@ -74,19 +71,17 @@ jobs:
 
       - name: Extract plugin registrations
         id: extract
-        shell: bash
+        shell: pwsh
         env:
           ASSEMBLY_PATH: ${{ inputs.assembly-path }}
           OUTPUT_PATH: ${{ inputs.output-path }}
         run: |
-          echo "Extracting plugin registrations from $ASSEMBLY_PATH..."
-
-          ppds plugin extract \
-            --assembly-path "$ASSEMBLY_PATH" \
-            --output "$OUTPUT_PATH"
-
-          echo "Registrations extracted to $OUTPUT_PATH"
-          echo "file=$OUTPUT_PATH" >> $GITHUB_OUTPUT
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          if ($env:OUTPUT_PATH -match '[\r\n]') { throw 'output-path must be a single line.' }
+          & ppds plugins extract --input $env:ASSEMBLY_PATH --output $env:OUTPUT_PATH
+          if ($LASTEXITCODE -ne 0) { throw "Plugin extraction failed (exit $LASTEXITCODE)." }
+          "file=$env:OUTPUT_PATH" >> $env:GITHUB_OUTPUT
 
       - name: Upload registrations artifact
         uses: actions/upload-artifact@v6

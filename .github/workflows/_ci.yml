@@ -15,6 +15,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup .NET for offline contracts
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.x'
+
+      - name: Install offline test dependencies
+        run: |
+          python3 -m pip install -r tests/requirements.txt
+          dotnet tool install PPDS.Cli --version 1.4.1 --tool-path "$RUNNER_TEMP/ppds-alm-cli"
+
       - name: Validate GitHub workflow files
         run: |
           echo "Validating GitHub workflow files..."
@@ -33,3 +43,8 @@ jobs:
             python3 -c "import yaml; yaml.safe_load(open('$file'))" || exit 1
           done
           echo "All composite action files are valid YAML"
+
+      - name: Test workflow and consumer contracts
+        env:
+          PPDS_TEST_CLI_COMMAND: '["${{ runner.temp }}/ppds-alm-cli/ppds"]'
+        run: python3 -m unittest discover -s tests -v
