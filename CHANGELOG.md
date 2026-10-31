@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Prepared patch target: **1.0.1**. No release or version tag has been created or moved.
+## [1.0.1] - 2026-10-30
 
 ### Fixed
 
