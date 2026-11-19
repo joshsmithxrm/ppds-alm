@@ -7,7 +7,7 @@ CI/CD templates for Power Platform ALM automation.
 - Use `powershell` shell in workflows - use `pwsh` for PowerShell 7+
 - Hardcode secrets in templates - use `secrets:` inputs
 - Use `@main` in production - pin to specific version tags (`@v1.0.0`)
-- Force push version tags - breaks consumers pinned to that version
+- Force push specific version tags (`v1.0.0`) - breaks consumers pinned to that version; only the `v1` major alias moves
 - Modify consumer-facing templates without testing
 
 ## ALWAYS
@@ -39,7 +39,7 @@ CI/CD templates for Power Platform ALM automation.
 | Command | Purpose |
 |---------|---------|
 | `python3 -m pip install -r tests/requirements.txt` | Install offline test dependencies |
-| `python3 -m unittest discover -s tests -v` | Offline contract tests (what CI runs; see `tests/README.md`) |
+| `python3 -m unittest discover -s tests -v` | Offline contract tests (what CI runs; see `tests/README.md`). CI also installs PPDS.Cli 1.4.1 and sets `PPDS_TEST_CLI_COMMAND`; without it the real-CLI test is skipped |
 
 CI also parses every workflow and action file with `yaml.safe_load`. `actionlint` is not part of CI: it reports false positives on `job.workflow_*` (see `tests/README.md`).
 
@@ -48,7 +48,7 @@ CI also parses every workflow and action file with `yaml.safe_load`. `actionlint
 | Tag | Purpose |
 |-----|---------|
 | `v1.0.0` | Specific version (recommended) |
-| `v1` | Major version alias (latest v1.x release) |
+| `v1` | Major version alias; moved by hand by the maintainer at release (no automation) |
 
 ## Key Files
 
